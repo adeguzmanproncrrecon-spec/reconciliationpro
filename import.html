@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Data Ingestion — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep"></script>
+<!-- SheetJS 0.20.3 (self-hosted; ang 0.18.5 sa cdnjs ay may CVE-2023-30533 at CVE-2024-22363) -->
+<script src="js/vendor/xlsx-0.20.3.full.min.js"
+        integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"></script>
+<script src="js/xlsx-import.js"></script>
+<style>
+  :root{
+    --ink:#141B22;
+    --ink-soft:#1F2932;
+    --paper:#F3F4F1;
+    --paper-raised:#FFFFFF;
+    --teal:#1C4A47;
+    --teal-light:#2E6B66;
+    --rust:#A8432C;
+    --amber:#8A6224;
+    --slate:#5B6670;
+    --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  h3{ font-size:15px; margin:0; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .bad{ color:var(--rust); font-weight:600; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .head-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+
+  .row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .field input[type=number]{ width:100px; }
+  .field select:focus, .field input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+
+  .btn{
+    font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+    padding:8px 14px; border-radius:8px; border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink);
+  }
+  .btn:hover{ border-color:#C3C8C1; }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; }
+  .btn-primary:hover{ background:var(--teal-light); }
+  .btn-danger{ color:var(--rust); }
+  .btn-sm{ font-size:12.5px; padding:5px 10px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:12px; font-weight:600; color:var(--slate); background:var(--paper); padding:9px 12px; white-space:nowrap; }
+  td{ padding:9px 12px; border-top:1px solid var(--line); white-space:nowrap; vertical-align:middle; }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tr.pick{ cursor:pointer; }
+  tr.pick:hover td{ background:#F7F8F5; }
+  tr.selected td{ background:#E6EFEC; }
+  .empty{ padding:20px; text-align:center; color:var(--slate); font-size:13.5px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--slate); }
+
+  .status{ font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:20px; }
+  .status.complete, .status.matched{ background:#E2EEEC; color:var(--teal); }
+  .status.uploading, .status.draft{ background:#F7EEDD; color:var(--amber); }
+  .status.failed{ background:#FBEAE6; color:var(--rust); }
+  .status.discarded{ background:var(--paper); color:var(--slate); }
+
+  .results{ border:1px solid var(--line); border-radius:8px; margin-top:6px; max-height:260px; overflow:auto; }
+  .results button{
+    display:block; width:100%; text-align:left; font-family:inherit; font-size:13px;
+    background:none; border:none; border-bottom:1px solid var(--line); padding:9px 12px; cursor:pointer;
+  }
+  .results button:hover{ background:#F7F8F5; }
+
+  .facts{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin:6px 0 18px; }
+  .facts div{ background:var(--paper); border-radius:8px; padding:10px 12px; font-size:12.5px; color:var(--slate); }
+  .facts b{ display:block; color:var(--ink); font-size:14px; margin-top:2px; }
+
+  .slots{ display:grid; grid-template-columns:1fr; gap:16px; }
+  .slot{ border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .slot .slot-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+  .uploader{ border-top:1px dashed var(--line); margin-top:12px; padding-top:12px; }
+  .map-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; margin:10px 0; }
+  .map-grid .field{ min-width:0; }
+  .map-grid .req label::after{ content:' *'; color:var(--rust); }
+  .stats{ display:flex; gap:20px; flex-wrap:wrap; font-size:13px; margin:8px 0 12px; }
+  .stats b{ font-family:'Fraunces',serif; font-weight:500; font-size:18px; display:block; color:var(--ink); }
+  .progress{ height:8px; background:var(--paper); border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .progress div{ height:100%; width:0; background:var(--teal); transition:width .2s ease; }
+
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <!-- ===================== RUNS LIST ===================== -->
+  <div class="card" id="runsCard">
+    <div class="head-row">
+      <div>
+        <h2>Recon runs</h2>
+        <p class="sub" style="margin:0">One run = one facility and its report dates. Upload the PhilHealth extractions to a run.</p>
+      </div>
+      <button class="btn btn-primary" type="button" id="newRunBtn">New run</button>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="branchFilter">Branch</label>
+        <select id="branchFilter"></select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Facility</th><th>Branch</th><th>Report date</th><th>Matching date</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody id="runsBody"></tbody>
+      </table>
+      <div class="empty" id="runsEmpty" hidden>No runs yet.</div>
+    </div>
+    <div class="pager">
+      <span id="runsRange"></span>
+      <button class="btn btn-sm" type="button" id="runsPrev" disabled>Previous</button>
+      <button class="btn btn-sm" type="button" id="runsNext" disabled>Next</button>
+    </div>
+  </div>
+
+  <!-- ===================== NEW RUN ===================== -->
+  <div class="card" id="newRunCard" hidden>
+    <h2>New recon run</h2>
+    <p class="sub">Choose the facility, then set the dates. You can change the dates later while the run is a draft.</p>
+    <div class="field" style="max-width:460px">
+      <label for="facSearch">Facility (name or accreditation no.)</label>
+      <input type="search" id="facSearch" placeholder="Type at least 2 characters" autocomplete="off">
+      <div class="results" id="facResults" hidden></div>
+      <div class="muted" id="facChosen" style="margin-top:6px"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="nrReport">Report date *</label><input type="text" class="mdy" id="nrReport" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field"><label for="nrPrev">Previous report date</label><input type="text" class="mdy" id="nrPrev" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field"><label for="nrMatch">Matching date *</label><input type="text" class="mdy" id="nrMatch" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field"><label for="nrCovStart">LOI coverage start</label><input type="text" class="mdy" id="nrCovStart" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field"><label for="nrCovEnd">LOI coverage end</label><input type="text" class="mdy" id="nrCovEnd" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" type="button" id="createRunBtn">Create run</button>
+      <button class="btn" type="button" id="cancelRunBtn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===================== RUN DETAIL ===================== -->
+  <div class="card" id="runCard" hidden>
+    <div class="head-row">
+      <div>
+        <h2 id="runTitle"></h2>
+        <p class="sub" id="runSub" style="margin:0"></p>
+      </div>
+      <span class="status" id="runStatus"></span>
+    </div>
+
+    <div class="facts">
+      <div>Report date<b id="fReport"></b></div>
+      <div>Previous report date<b id="fPrev"></b></div>
+      <div>Matching date<b id="fMatch"></b></div>
+      <div>LOI coverage<b id="fCov"></b></div>
+    </div>
+
+    <div class="row" id="hfRow">
+      <div class="field" style="min-width:320px">
+        <label for="hfSelect">HF ICS submission (from the facility)</label>
+        <select id="hfSelect"></select>
+      </div>
+      <button class="btn btn-sm" type="button" id="hfSaveBtn">Use this submission</button>
+    </div>
+
+    <div class="slots" id="slots"></div>
+  </div>
+
+<script>
+(async function(){
+  const X = window.XlsxImport;
+  const CHUNK = 2000, RUNS_PAGE = 10;
+
+  // ---------- Mga uri ng upload at ang mga field nila (RECON_SPEC §2) ----------
+  // type: series | text | date | amount | int; aliases = mga header na tinatanggap (normalized: A-Z0-9 lang)
+  const KINDS = [
+    { kind: 'ho_ics', label: 'HO ICS', hint: 'PhilHealth books (CLAIM_SERIES, ESTIMATED_AMT, RECREF).', fields: [
+      { key: 'series_raw', label: 'CLAIM_SERIES', type: 'series', req: true, aliases: ['CLAIMSERIES', 'SERIES', 'CSN', 'CLAIMSERIESNUMBER'] },
+      { key: 'estimated_amt', label: 'ESTIMATED_AMT', type: 'amount', req: true, aliases: ['ESTIMATEDAMT', 'ESTIMATEDAMOUNT'] },
+      { key: 'recref', label: 'RECREF', type: 'date', req: true, aliases: ['RECREF', 'RECREFDATE'] }
+    ]},
+    { kind: 'raw_matching', label: 'Raw Matching (Claims Universe)', hint: 'PH_INST_CODE … LATEST_CTRL_DT.', fields: [
+      { key: 'ph_inst_code', label: 'PH_INST_CODE', type: 'text' },
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'mecno', label: 'MECNO', type: 'text' },
+      { key: 'patlname', label: 'PATLNAME', type: 'text' },
+      { key: 'patfname', label: 'PATFNAME', type: 'text' },
+      { key: 'patmname', label: 'PATMNAME', type: 'text' },
+      { key: 'worlname', label: 'WORLNAME', type: 'text' },
+      { key: 'worfname', label: 'WORFNAME', type: 'text' },
+      { key: 'wormname', label: 'WORMNAME', type: 'text' },
+      { key: 'date_adm', label: 'DATE_ADM', type: 'date' },
+      { key: 'date_dis', label: 'DATE_DIS', type: 'date' },
+      { key: 'date_rec', label: 'DATE_REC', type: 'date' },
+      { key: 'date_recon', label: 'DATE_RECON', type: 'date' },
+      { key: 'last_refiled', label: 'LAST_REFILED', type: 'date' },
+      { key: 'status', label: 'STATUS', type: 'text', req: true },
+      { key: 'total_acr_amount', label: 'TOTAL_ACR_AMOUNT', type: 'amount' },
+      { key: 'latest_check_dt', label: 'LATEST_CHECK_DT', type: 'date' },
+      { key: 'total_tot_amnt', label: 'TOTAL_TOT_AMNT', type: 'amount' },
+      { key: 'latest_ctrl_no', label: 'LATEST_CTRL_NO', type: 'text' },
+      { key: 'latest_ctrl_dt', label: 'LATEST_CTRL_DT', type: 'date' }
+    ]},
+    { kind: 'status_trail', label: 'Status Trail', hint: 'One upload covers all cutoffs (report, previous report, matching date).', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'time_rec', label: 'TIME_REC', type: 'int', req: true },
+      { key: 'date_tagged', label: 'DATE_TAGGED', type: 'date', req: true },
+      { key: 'process', label: 'PROCESS', type: 'text', req: true }
+    ]},
+    { kind: 'payment_details', label: 'Payment Details', hint: 'SERIES, DATE_EXT, CHECK_NO … TOTAL_TOT_AMNT.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'date_ext', label: 'DATE_EXT', type: 'date' },
+      { key: 'check_no', label: 'CHECK_NO', type: 'text' },
+      { key: 'check_dt', label: 'CHECK_DT', type: 'date' },
+      { key: 'isirm', label: 'ISIRM', type: 'text' },
+      { key: 'is_dcpm', label: 'IS_DCPM', type: 'text' },
+      { key: 'pr_no', label: 'PR_NO', type: 'text' },
+      { key: 'tranche_number', label: 'TRANCHE_NUMBER', type: 'text' },
+      { key: 'cw_tax', label: 'CW_TAX', type: 'amount' },
+      { key: 'receipt_no', label: 'RECEIPT_NO', type: 'text' },
+      { key: 'receipt_dt', label: 'RECEIPT_DT', type: 'date' },
+      { key: 'cpay_to', label: 'CPAY_TO', type: 'text' },
+      { key: 'total_tot_amnt', label: 'TOTAL_TOT_AMNT', type: 'amount' }
+    ]},
+    // ---- Yugto 2 (optional; hindi kailangan para sa matching) ----
+    { kind: 'rth_reasons', optional: true, label: 'RTH/Denial Reasons', hint: 'CLAIM SERIES NUMBER, DEF CODE, REASON, EFFECT, ICD CODE, HEALTH PROFESSIONAL.', fields: [
+      { key: 'series_raw', label: 'CLAIM SERIES NUMBER', type: 'series', req: true, aliases: ['CLAIMSERIESNUMBER', 'CLAIMSERIES', 'SERIES'] },
+      { key: 'def_code', label: 'DEF CODE', type: 'text' },
+      { key: 'reason', label: 'REASON', type: 'text', max: 500 },
+      { key: 'effect', label: 'EFFECT', type: 'text' },
+      { key: 'icd_code', label: 'ICD CODE', type: 'text' },
+      { key: 'health_professional', label: 'HEALTH PROFESSIONAL', type: 'text', max: 300 }
+    ]},
+    { kind: 'mr', optional: true, label: 'Motion for Reconsideration', hint: 'SERIES, hciPAN, memberPIN, mrRcvDate … finalDateEncoded.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'hci_pan', label: 'hciPAN', type: 'text' },
+      { key: 'member_pin', label: 'memberPIN', type: 'text' },
+      { key: 'mr_rcv_date', label: 'mrRcvDate', type: 'date' },
+      { key: 'approval', label: 'approval', type: 'text' },
+      { key: 'final_recom', label: 'finalRecom', type: 'text' },
+      { key: 'final_basis', label: 'finalBasis', type: 'text', max: 500 },
+      { key: 'date_finalized', label: 'dateFinalized', type: 'date' },
+      { key: 'uploaded_date', label: 'uploadedDate', type: 'date' },
+      { key: 'crc_received_date', label: 'crcReceivedDate', type: 'date' },
+      { key: 'ini_date_encoded', label: 'iniDateEncoded', type: 'date' },
+      { key: 'final_date_encoded', label: 'finalDateEncoded', type: 'date' }
+    ]},
+    { kind: 'pard', optional: true, label: 'PARD', hint: 'SERIES, ENTRY_DATE, APPROVAL_SOURCE.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'entry_date', label: 'ENTRY_DATE', type: 'date' },
+      { key: 'approval_source', label: 'APPROVAL_SOURCE', type: 'text' }
+    ]},
+    { kind: 'pf_name', optional: true, label: 'PF Name', hint: 'SERIES, DOCTORS NAME.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'doctors_name', label: 'DOCTORS NAME', type: 'text', req: true, max: 300, aliases: ['DOCTORSNAME', 'DOCTORNAME', 'PFNAME'] }
+    ]},
+    { kind: 'tagging', optional: true, label: 'Tagging of Issue', hint: 'SERIES, DATE_TAGGED, PROCESS.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'date_tagged', label: 'DATE_TAGGED', type: 'date', req: true },
+      { key: 'process', label: 'PROCESS', type: 'text' }
+    ]},
+    { kind: 'untagging', optional: true, label: 'Untagging of Issue', hint: 'SERIES, DATE_UNTAGGED, PROCESS.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'date_untagged', label: 'DATE_UNTAGGED', type: 'date', req: true },
+      { key: 'process', label: 'PROCESS', type: 'text' }
+    ]},
+    // Open Question #3: mukhang nagkakapalit ang ICDCODE at amount → i-flag ang ICD code na hindi nagsisimula sa letra
+    { kind: 'icd_codes', optional: true, label: 'ICD Codes', hint: 'SERIES, ICDCODE, RVSCODE, TOTAL_ACR_AMOUNT. ICD codes that do not start with a letter are flagged.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES'] },
+      { key: 'icd_code', label: 'ICDCODE', type: 'text', mustMatch: /^[A-Za-z]/ },
+      { key: 'rvs_code', label: 'RVSCODE', type: 'text' },
+      { key: 'total_acr_amount', label: 'TOTAL_ACR_AMOUNT', type: 'amount' }
+    ]},
+    { kind: 'claim_type', optional: true, label: 'Type of Claim (eClaims / Manual)', hint: 'SERIES and the claim type (e.g. eClaims or Manual). Map the column if the header is different.', fields: [
+      { key: 'series_raw', label: 'SERIES', type: 'series', req: true, aliases: ['SERIES', 'CLAIMSERIES', 'CLAIMSERIESNUMBER'] },
+      { key: 'claim_type', label: 'CLAIM TYPE', type: 'text', req: true,
+        aliases: ['CLAIMTYPE', 'TYPEOFCLAIM', 'TYPE', 'FILINGTYPE', 'FILINGMODE', 'MODEOFFILING', 'ECLAIMSMANUAL'] }
+    ]}
+  ];
+
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { runsOffset: 0, run: null, facility: null, branches: [], myBranches: [] };
+
+  const me = await window.sbUserReady;
+
+  // ---------- helpers ----------
+  function showMsg(text, kind){ const m = $('msg'); m.textContent = text; m.className = 'msg show ' + kind; m.scrollIntoView({ block: 'nearest' }); }
+  function clearMsg(){ $('msg').className = 'msg'; }
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function badge(status){ return h('span', { class: 'status ' + status, text: status }); }
+  // Lahat ng petsa sa UI ay MM/DD/YYYY (hindi nakadepende sa locale ng browser)
+  function fmtDate(d){ if (!d) return '—'; const p = d.slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){
+    if (!ts) return '—';
+    const t = new Date(ts), pad = function(n){ return String(n).padStart(2, '0'); };
+    return pad(t.getMonth() + 1) + '/' + pad(t.getDate()) + '/' + t.getFullYear() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes());
+  }
+  function todayMdy(){ const t = new Date(); return fmtDate(t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')); }
+  // "MM/DD/YYYY" → "YYYY-MM-DD"; '' → null; mali → undefined
+  function mdyToIso(v){
+    v = (v || '').trim();
+    if (!v) return null;
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return undefined;
+    const mm = +m[1], dd = +m[2], yy = +m[3];
+    const dt = new Date(Date.UTC(yy, mm - 1, dd));
+    if (yy < 1900 || yy > 2100 || dt.getUTCMonth() !== mm - 1 || dt.getUTCDate() !== dd) return undefined;
+    return yy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
+  }
+  // Awtomatikong "/" habang nagta-type: 12312025 → 12/31/2025
+  document.querySelectorAll('input.mdy').forEach(function(inp){
+    inp.addEventListener('input', function(){
+      const d = inp.value.replace(/\D/g, '').slice(0, 8);
+      inp.value = d.length > 4 ? d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4)
+                : d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+    });
+  });
+  function norm(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function normalizeSeries(raw){ const d = (raw || '').replace(/\D/g, ''); return d.length >= 13 ? d.slice(0, 13) : null; }
+
+  // ---------- branch filter (UI filter lang; nakikita ng FINMAREP ang lahat) ----------
+  async function loadBranches(){
+    const [{ data: br }, { data: mine }] = await Promise.all([
+      sb.from('branches').select('id, code, name').order('name'),
+      sb.from('user_branches').select('branch_id').eq('user_id', me.id)
+    ]);
+    state.branches = br || [];
+    state.myBranches = (mine || []).map(function(r){ return r.branch_id; });
+    const sel = $('branchFilter');
+    sel.replaceChildren();
+    if (state.myBranches.length) sel.add(new Option('My branches', 'mine'));
+    sel.add(new Option('All branches', 'all'));
+    state.branches.forEach(function(b){ sel.add(new Option(b.name + ' (' + b.code + ')', b.id)); });
+  }
+
+  // ---------- runs list ----------
+  async function loadRuns(){
+    let q = sb.from('recon_runs')
+      .select('id, report_date, matching_date, status, created_at, facility_id, facilities!inner(name, accreditation_no, branch_id, branches(code))', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(state.runsOffset, state.runsOffset + RUNS_PAGE - 1);
+    const f = $('branchFilter').value;
+    if (f === 'mine') q = q.in('facilities.branch_id', state.myBranches);
+    else if (f && f !== 'all') q = q.eq('facilities.branch_id', f);
+    const { data, error, count } = await q;
+    const body = $('runsBody');
+    body.replaceChildren();
+    if (error) { showMsg('Could not load runs: ' + error.message, 'err'); return; }
+    data.forEach(function(r){
+      const tr = h('tr', { class: 'pick' + (state.run && state.run.id === r.id ? ' selected' : ''), onclick: function(){ openRun(r.id); } }, [
+        h('td', {}, [h('div', { text: r.facilities.name }), h('div', { class: 'muted', text: r.facilities.accreditation_no })]),
+        h('td', { text: r.facilities.branches ? r.facilities.branches.code : '—' }),
+        h('td', { text: fmtDate(r.report_date) }),
+        h('td', { text: fmtDate(r.matching_date) }),
+        h('td', {}, [badge(r.status)]),
+        h('td', { text: fmtTs(r.created_at) })
+      ]);
+      body.append(tr);
+    });
+    $('runsEmpty').hidden = data.length > 0;
+    const total = count || 0;
+    $('runsRange').textContent = total ? (state.runsOffset + 1) + '–' + (state.runsOffset + data.length) + ' of ' + total : '';
+    $('runsPrev').disabled = state.runsOffset === 0;
+    $('runsNext').disabled = state.runsOffset + data.length >= total;
+  }
+
+  // ---------- new run ----------
+  let facTimer;
+  $('facSearch').addEventListener('input', function(){
+    clearTimeout(facTimer);
+    const raw = this.value.trim();
+    facTimer = setTimeout(async function(){
+      const box = $('facResults');
+      box.replaceChildren();
+      // Alisin ang mga character na may espesyal na kahulugan sa PostgREST filter
+      const q = raw.replace(/[,()%*\\:."']/g, ' ').trim();
+      if (q.length < 2) { box.hidden = true; return; }
+      const { data, error } = await sb.from('facilities')
+        .select('id, name, accreditation_no, branches(code)')
+        .or('name.ilike.*' + q + '*,accreditation_no.ilike.*' + q + '*')
+        .order('name').limit(10);
+      if (error) { box.hidden = true; showMsg('Search failed: ' + error.message, 'err'); return; }
+      data.forEach(function(f){
+        box.append(h('button', { type: 'button', text: f.name + ' · ' + f.accreditation_no + (f.branches ? ' · ' + f.branches.code : ''),
+          onclick: function(){
+            state.facility = f;
+            $('facChosen').textContent = 'Selected: ' + f.name + ' (' + f.accreditation_no + ')';
+            box.hidden = true;
+            loiDefault(f);
+          } }));
+      });
+      if (!data.length) box.append(h('div', { class: 'empty', text: 'No facility found.' }));
+      box.hidden = false;
+    }, 300);
+  });
+
+  // Default na LOI coverage: mula sa pinakabagong LOI na isinumite ng facility (f_loi.html)
+  async function loiDefault(f){
+    const { data } = await sb.from('facility_lois')
+      .select('letter_date, coverage_start, coverage_end, submitted_at')
+      .eq('facility_id', f.id).order('submitted_at', { ascending: false }).limit(1);
+    if (state.facility !== f) return;
+    const l = data && data[0];
+    const base = 'Selected: ' + f.name + ' (' + f.accreditation_no + ')';
+    if (!l) {
+      ['nrCovStart', 'nrCovEnd'].forEach(function(id){ $(id).value = ''; });
+      $('facChosen').textContent = base + ' · no Letter of Intent submitted yet';
+      return;
+    }
+    $('nrCovStart').value = fmtDate(l.coverage_start);
+    $('nrCovEnd').value = fmtDate(l.coverage_end);
+    $('facChosen').textContent = base + ' · LOI coverage from the latest Letter of Intent (dated ' + fmtDate(l.letter_date) + ')';
+  }
+
+  $('newRunBtn').addEventListener('click', function(){
+    clearMsg();
+    state.facility = null;
+    $('facSearch').value = '';
+    $('facChosen').textContent = '';
+    ['nrReport', 'nrPrev', 'nrMatch', 'nrCovStart', 'nrCovEnd'].forEach(function(id){ $(id).value = ''; });
+    $('nrMatch').value = todayMdy();
+    $('newRunCard').hidden = false;
+    $('facSearch').focus();
+  });
+  $('cancelRunBtn').addEventListener('click', function(){ $('newRunCard').hidden = true; });
+
+  $('createRunBtn').addEventListener('click', async function(){
+    if (!state.facility) { showMsg('Choose a facility first.', 'err'); return; }
+    const labels = { nrReport: 'Report date', nrPrev: 'Previous report date', nrMatch: 'Matching date',
+                     nrCovStart: 'LOI coverage start', nrCovEnd: 'LOI coverage end' };
+    const d = {};
+    for (const id of Object.keys(labels)) {
+      d[id] = mdyToIso($(id).value);
+      if (d[id] === undefined) { showMsg(labels[id] + ' must be a valid date in MM/DD/YYYY format.', 'err'); $(id).focus(); return; }
+    }
+    if (!d.nrReport || !d.nrMatch) { showMsg('Report date and matching date are required.', 'err'); return; }
+    // ISO "YYYY-MM-DD" → tama ang paghahambing bilang text
+    if (d.nrPrev && d.nrPrev >= d.nrReport) {
+      showMsg('Previous report date must be earlier than the report date (e.g. report date 12/31/2025, previous report date 06/30/2025).', 'err');
+      return;
+    }
+    if (d.nrCovStart && d.nrCovEnd && d.nrCovStart > d.nrCovEnd) {
+      showMsg('LOI coverage start must be on or before the coverage end.', 'err');
+      return;
+    }
+    const btn = this; btn.disabled = true;
+    const { data: id, error } = await sb.rpc('create_recon_run', {
+      p_facility: state.facility.id,
+      p_report_date: d.nrReport,
+      p_prev_report_date: d.nrPrev,
+      p_matching_date: d.nrMatch,
+      p_coverage_start: d.nrCovStart,
+      p_coverage_end: d.nrCovEnd
+    });
+    btn.disabled = false;
+    if (error) { showMsg('Could not create run: ' + error.message, 'err'); return; }
+    $('newRunCard').hidden = true;
+    showMsg('Run created for ' + state.facility.name + '.', 'ok');
+    state.runsOffset = 0;
+    await loadRuns();
+    openRun(id);
+  });
+
+  // ---------- run detail ----------
+  async function openRun(id){
+    const { data: r, error } = await sb.from('recon_runs')
+      .select('*, facilities(name, accreditation_no, branches(code, name))').eq('id', id).single();
+    if (error) { showMsg('Could not open run: ' + error.message, 'err'); return; }
+    state.run = r;
+    $('runTitle').textContent = r.facilities.name;
+    $('runSub').textContent = r.facilities.accreditation_no + (r.facilities.branches ? ' · ' + r.facilities.branches.name : '');
+    $('runStatus').replaceChildren(document.createTextNode(r.status));
+    $('runStatus').className = 'status ' + r.status;
+    $('fReport').textContent = fmtDate(r.report_date);
+    $('fPrev').textContent = fmtDate(r.prev_report_date);
+    $('fMatch').textContent = fmtDate(r.matching_date);
+    $('fCov').textContent = (r.coverage_start || r.coverage_end) ? fmtDate(r.coverage_start) + ' – ' + fmtDate(r.coverage_end) : '—';
+    $('runCard').hidden = false;
+    await Promise.all([loadHfSubmissions(), renderSlots()]);
+    document.querySelectorAll('#runsBody tr').forEach(function(tr){ tr.classList.remove('selected'); });
+    loadRuns();
+    $('runCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function loadHfSubmissions(){
+    const sel = $('hfSelect');
+    sel.replaceChildren();
+    const { data, error } = await sb.from('hf_ics_submissions')
+      .select('id, file_name, row_count, invalid_series_count, completed_at')
+      .eq('facility_id', state.run.facility_id).eq('status', 'complete')
+      .order('completed_at', { ascending: false }).limit(10);
+    if (error || !data.length) {
+      sel.add(new Option('No completed HF ICS upload from this facility yet', ''));
+      $('hfSaveBtn').disabled = true;
+      return;
+    }
+    // Isama ang naka-save na submission ng run kahit wala sa pinakabagong 10
+    const cur = state.run.hf_submission_id;
+    if (cur && !data.some(function(s){ return s.id === cur; })) {
+      const { data: old } = await sb.from('hf_ics_submissions')
+        .select('id, file_name, row_count, invalid_series_count, completed_at').eq('id', cur).maybeSingle();
+      if (old) data.push(old);
+    }
+    data.forEach(function(s){
+      sel.add(new Option(fmtTs(s.completed_at) + ' · ' + s.file_name + ' · ' + s.row_count.toLocaleString() + ' rows', s.id));
+    });
+    sel.value = state.run.hf_submission_id || '';
+    $('hfSaveBtn').disabled = state.run.status !== 'draft';
+  }
+
+  $('hfSaveBtn').addEventListener('click', async function(){
+    const v = $('hfSelect').value;
+    if (!v) return;
+    const { error } = await sb.rpc('set_run_hf_submission', { p_run: state.run.id, p_submission: v });
+    if (error) { showMsg(error.message, 'err'); return; }
+    state.run.hf_submission_id = v;
+    showMsg('HF ICS submission saved for this run.', 'ok');
+  });
+
+  // ---------- upload slots ----------
+  async function renderSlots(){
+    const wrap = $('slots');
+    wrap.replaceChildren();
+    const { data: uploads, error } = await sb.from('run_uploads')
+      .select('id, kind, file_name, sheet_name, status, row_count, invalid_series_count, created_at')
+      .eq('run_id', state.run.id).order('created_at', { ascending: false }).limit(200);
+    if (error) { showMsg('Could not load uploads: ' + error.message, 'err'); return; }
+    KINDS.forEach(function(cfg, i){
+      if (cfg.optional && !KINDS[i - 1].optional) {
+        wrap.append(h('div', {}, [
+          h('h3', { text: 'Additional details (optional)' }),
+          h('div', { class: 'muted', text: 'Not required for matching. Used for the case rate, health care professional, RTH/Denial, MR, PARD, issue tagging and type of claim columns of the Matching Report, and for Claim History.' })
+        ]));
+      }
+      const mine = uploads.filter(function(u){ return u.kind === cfg.kind; });
+      const slot = h('div', { class: 'slot' });
+      const addBtn = h('button', { class: 'btn btn-sm btn-primary', type: 'button', text: 'Upload file' });
+      slot.append(h('div', { class: 'slot-head' }, [
+        h('div', {}, [h('h3', { text: cfg.label }), h('div', { class: 'muted', text: cfg.hint })]),
+        state.run.status === 'draft' ? addBtn : null
+      ]));
+      if (mine.length) {
+        const tbody = h('tbody');
+        mine.forEach(function(u){
+          tbody.append(h('tr', {}, [
+            h('td', { text: fmtTs(u.created_at) }),
+            h('td', { text: u.file_name + (u.sheet_name ? ' · ' + u.sheet_name : '') }),
+            h('td', {}, [badge(u.status)]),
+            h('td', { class: 'num', text: u.row_count.toLocaleString() }),
+            h('td', { class: 'num' + (u.invalid_series_count ? ' bad' : ''), text: u.invalid_series_count.toLocaleString() }),
+            h('td', {}, [(u.status === 'complete' || u.status === 'failed' ||
+                          (u.status === 'uploading' && Date.now() - new Date(u.created_at) > 6 * 3600 * 1000))
+                         && state.run.status === 'draft'
+              ? h('button', { class: 'btn btn-sm btn-danger', type: 'button', text: 'Discard', onclick: async function(){
+                  if (!confirm('Discard "' + u.file_name + '"? It will not be used in matching. Nothing is deleted.')) return;
+                  const { error } = await sb.rpc('discard_run_upload', { p_upload: u.id });
+                  if (error) { showMsg(error.message, 'err'); return; }
+                  renderSlots();
+                } })
+              : null])
+          ]));
+        });
+        slot.append(h('div', { class: 'table-wrap' }, [h('table', {}, [
+          h('thead', {}, [h('tr', {}, ['Uploaded', 'File', 'Status', 'Rows', 'Invalid series', ''].map(function(t){ return h('th', { text: t }); }))]),
+          tbody
+        ])]));
+      } else {
+        slot.append(h('div', { class: 'muted', text: 'No file uploaded yet.' }));
+      }
+      const up = h('div', { class: 'uploader', hidden: '' });
+      slot.append(up);
+      addBtn.addEventListener('click', function(){ up.hidden = false; buildUploader(up, cfg); addBtn.disabled = true; });
+      wrap.append(slot);
+    });
+  }
+
+  // ---------- generic uploader ----------
+  function buildUploader(box, cfg){
+    box.replaceChildren();
+    const u = { wb: null, ws: null, file: null, headerRow: 0, headers: [], selects: {} };
+    const fileInput = h('input', { type: 'file', accept: '.xlsx' });
+    const sheetSel = h('select');
+    const headerInput = h('input', { type: 'number', min: '1' });
+    const setup = h('div', { hidden: '' });
+    const mapGrid = h('div', { class: 'map-grid' });
+    const stats = h('div', { class: 'stats' });
+    const flagBox = h('div');
+    const uploadBtn = h('button', { class: 'btn btn-primary', type: 'button', text: 'Upload' });
+    const cancelBtn = h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: function(){ renderSlots(); } });
+    const progWrap = h('div', { hidden: '' });
+    const bar = h('div');
+    const progText = h('div', { class: 'muted' });
+    progWrap.append(h('div', { class: 'progress' }, [bar]), progText);
+
+    box.append(
+      h('div', { class: 'row' }, [h('div', { class: 'field' }, [h('label', { text: 'File (.xlsx)' }), fileInput])]),
+      setup
+    );
+    setup.append(
+      h('div', { class: 'row' }, [
+        h('div', { class: 'field' }, [h('label', { text: 'Sheet' }), sheetSel]),
+        h('div', { class: 'field' }, [h('label', { text: 'Header row' }), headerInput])
+      ]),
+      h('div', { class: 'muted', text: 'Column mapping (matched automatically by header name; * = required):' }),
+      mapGrid, stats, flagBox,
+      h('div', { class: 'row' }, [uploadBtn, cancelBtn]),
+      progWrap
+    );
+
+    const patterns = cfg.fields.filter(function(f){ return f.req; }).map(function(f){
+      const names = (f.aliases || [norm(f.label)]);
+      return { test: function(t){ return names.includes(norm(t)); } };
+    });
+    const fieldNames = cfg.fields.map(function(f){ return f.aliases || [norm(f.label)]; });
+
+    // Ilang field ng kind na ito ang nakilala sa header row ng sheet
+    function recognized(ws){
+      const hr = X.detectHeaderRow(ws, patterns, 30);
+      const hs = X.headers(ws, hr).map(function(hd){ return norm(hd.name); });
+      return fieldNames.filter(function(names){ return names.some(function(n){ return hs.includes(n); }); }).length;
+    }
+    // Piliin ang sheet na may pinakamaraming nakilalang column para sa kind na ito
+    function bestSheet(){
+      let best = u.wb.SheetNames[0], bestN = -1;
+      u.wb.SheetNames.forEach(function(n){
+        const k = recognized(u.wb.Sheets[n]);
+        if (k > bestN) { best = n; bestN = k; }
+      });
+      return best;
+    }
+
+    function onSheet(){
+      u.ws = u.wb.Sheets[sheetSel.value];
+      u.headerRow = X.detectHeaderRow(u.ws, patterns, 30);
+      headerInput.value = u.headerRow + 1;
+      onHeader();
+    }
+    function onHeader(){
+      u.headerRow = Math.max(0, (+headerInput.value || 1) - 1);
+      u.headers = X.headers(u.ws, u.headerRow);
+      mapGrid.replaceChildren();
+      u.selects = {};
+      cfg.fields.forEach(function(f){
+        const sel = h('select');
+        sel.add(new Option('— not in file —', ''));
+        u.headers.forEach(function(hd){ sel.add(new Option(hd.letter + ' · ' + hd.name, String(hd.col))); });
+        const names = f.aliases || [norm(f.label)];
+        const match = u.headers.find(function(hd){ return names.includes(norm(hd.name)); });
+        sel.value = match ? String(match.col) : '';
+        sel.addEventListener('change', preview);
+        u.selects[f.key] = sel;
+        mapGrid.append(h('div', { class: 'field' + (f.req ? ' req' : '') }, [h('label', { text: f.label }), sel]));
+      });
+      preview();
+    }
+
+    function colOf(key){ const v = u.selects[key].value; return v === '' ? null : +v; }
+
+    // Isang row → object para sa RPC. Ibinabalik din ang bilang ng invalid na petsa/numero.
+    function parseRow(r, mappedCols, others){
+      const out = { row_no: r + 1 }, bad = [];
+      const extra = Object.create(null);
+      let budget = 6000;
+      cfg.fields.forEach(function(f){
+        const c = mappedCols[f.key];
+        if (c === null) return;
+        const ce = X.cell(u.ws, r, c);
+        let v = null;
+        if (f.type === 'series') v = X.seriesText(ce);
+        else if (f.type === 'text') {
+          v = X.cellText(ce);
+          if (v !== null) v = v.slice(0, f.max || 200);
+          // Hal. ICD code na numero lang: ina-upload pa rin, pero fina-flag at itinatala para ma-double check ni FINMAREP
+          if (v !== null && f.mustMatch && !f.mustMatch.test(v)) { bad.push([f.label, v]); extra[f.label + ' (check)'] = v.slice(0, 100); }
+        }
+        else if (f.type === 'amount') {
+          v = X.amount(ce);
+          if (v === null && X.cellText(ce) !== null) { bad.push([f.label, X.cellText(ce)]); extra[f.label + ' (invalid)'] = X.cellText(ce).slice(0, 100); }
+        }
+        else if (f.type === 'date') {
+          v = X.dateISO(ce);
+          if (v === null && X.cellText(ce) !== null) { bad.push([f.label, X.cellText(ce)]); extra[f.label + ' (invalid)'] = X.cellText(ce).slice(0, 100); }
+        } else if (f.type === 'int') {
+          const t = X.cellText(ce);
+          if (ce && ce.t === 'n' && Number.isFinite(ce.v)) v = Math.trunc(ce.v);
+          else if (t !== null && /^\d+$/.test(t.replace(/[,\s]/g, ''))) v = parseInt(t.replace(/[,\s]/g, ''), 10);
+          if (v === null && t !== null) { bad.push([f.label, X.cellText(ce)]); extra[f.label + ' (invalid)'] = t.slice(0, 100); }
+          if (v !== null && (v < -2147483648 || v > 2147483647)) { bad.push([f.label, X.cellText(ce)]); v = null; }
+        }
+        out[f.key] = v;
+      });
+      others.forEach(function(hd){
+        const t = X.cellText(X.cell(u.ws, r, hd.col));
+        if (t === null || budget <= 0) return;
+        const v = t.slice(0, Math.min(300, budget));
+        extra[hd.name] = v;
+        budget -= v.length + hd.name.length + 8;
+      });
+      out.extra = extra;
+      return { row: out, bad: bad };
+    }
+
+    function* dataRows(){
+      const rg = X.range(u.ws);
+      if (!rg) return;
+      const mapped = {}; cfg.fields.forEach(function(f){ mapped[f.key] = colOf(f.key); });
+      const usedCols = Object.values(mapped).filter(function(c){ return c !== null; });
+      const others = u.headers.filter(function(hd){ return !usedCols.includes(hd.col); });
+      for (let r = u.headerRow + 1; r <= rg.e.r; r++) {
+        // Lampasan ang ganap na blangkong row (o puro "-")
+        let any = false;
+        for (let i = 0; i < usedCols.length && !any; i++) any = X.cellText(X.cell(u.ws, r, usedCols[i])) !== null;
+        if (!any) continue;
+        yield parseRow(r, mapped, others);
+      }
+    }
+
+    function preview(){
+      const missing = cfg.fields.filter(function(f){ return f.req && colOf(f.key) === null; }).map(function(f){ return f.label; });
+      let rows = 0, invalidSeries = 0, badCells = 0;
+      const samples = [];   // unang 20 na-flag na value: [Excel row, column, value]
+      if (!missing.length) {
+        for (const p of dataRows()) {
+          rows++;
+          if (!normalizeSeries(p.row.series_raw)) invalidSeries++;
+          badCells += p.bad.length;
+          p.bad.forEach(function(b){ if (samples.length < 20) samples.push([p.row.row_no, b[0], b[1]]); });
+        }
+      }
+      flagBox.replaceChildren();
+      if (samples.length) {
+        const tb = h('tbody');
+        samples.forEach(function(s){ tb.append(h('tr', {}, [h('td', { class: 'num', text: String(s[0]) }), h('td', { text: s[1] }), h('td', { text: s[2] === null ? '(blank)' : String(s[2]) })])); });
+        flagBox.append(
+          h('div', { class: 'muted', text: 'Please double-check these values in the file (first ' + samples.length + ' of ' + badCells.toLocaleString() +
+            '). They are still uploaded; unreadable dates and amounts are saved as blank, flagged codes are kept as is.' }),
+          h('div', { class: 'table-wrap', style: 'margin:6px 0 12px; max-height:220px; overflow:auto' }, [h('table', {}, [
+            h('thead', {}, [h('tr', {}, ['Excel row', 'Column', 'Value in file'].map(function(t){ return h('th', { text: t }); }))]), tb])]));
+      }
+      const mappedCount = cfg.fields.filter(function(f){ return colOf(f.key) !== null; }).length;
+      u.lowMatch = mappedCount * 2 < cfg.fields.length;
+      stats.replaceChildren(
+        h('div', { class: u.lowMatch ? 'bad' : '' }, [document.createTextNode('Columns recognized'),
+          h('b', { text: mappedCount + ' of ' + cfg.fields.length })]),
+        h('div', {}, [document.createTextNode('Rows with data'), h('b', { text: rows.toLocaleString() })]),
+        h('div', { class: invalidSeries ? 'bad' : '' }, [document.createTextNode('Invalid Claim Series'), h('b', { text: invalidSeries.toLocaleString() })]),
+        h('div', { class: badCells ? 'bad' : '' }, [document.createTextNode('Unreadable or flagged values'), h('b', { text: badCells.toLocaleString() })])
+      );
+      if (missing.length) stats.append(h('div', { class: 'bad', text: 'Missing required: ' + missing.join(', ') + '. Is this the right sheet?' }));
+      else if (u.lowMatch) stats.append(h('div', { class: 'bad', text: 'Fewer than half of the ' + cfg.label + ' columns were found. Check that the sheet is correct.' }));
+      uploadBtn.disabled = !!missing.length || rows === 0;
+      u.rowsCount = rows;
+    }
+
+    fileInput.addEventListener('change', async function(){
+      const f = fileInput.files[0];
+      if (!f) return;
+      clearMsg();
+      if (!/\.xlsx$/i.test(f.name)) { showMsg('Please choose an .xlsx file.', 'err'); return; }
+      try {
+        u.file = f;
+        u.wb = await X.readWorkbook(f);
+        sheetSel.replaceChildren();
+        u.wb.SheetNames.forEach(function(n){ sheetSel.add(new Option(n, n)); });
+        sheetSel.value = bestSheet();
+        setup.hidden = false;
+        onSheet();
+      } catch (err) {
+        showMsg('Could not read this file: ' + (err.message || err), 'err');
+      }
+    });
+    sheetSel.addEventListener('change', onSheet);
+    headerInput.addEventListener('change', onHeader);
+
+    uploadBtn.addEventListener('click', async function(){
+      if (u.lowMatch && !confirm('Only a few ' + cfg.label + ' columns were recognized in sheet "' + sheetSel.value +
+                                 '". This may be the wrong sheet. Upload anyway?')) return;
+      if (!confirm('Upload ' + u.rowsCount.toLocaleString() + ' rows of ' + cfg.label + ' from "' + u.file.name +
+                   '" (sheet "' + sheetSel.value + '")?')) return;
+      clearMsg();
+      uploadBtn.disabled = true; cancelBtn.disabled = true; fileInput.disabled = true;
+      progWrap.hidden = false;
+      const colMap = {};
+      cfg.fields.forEach(function(f){
+        const c = colOf(f.key);
+        if (c !== null) colMap[f.key] = u.headers.find(function(hd){ return hd.col === c; }).name;
+      });
+      let uploadId = null, sent = 0, batch = [];
+      async function flush(){
+        if (!batch.length) return;
+        const { error } = await sb.rpc('add_run_rows', { p_upload: uploadId, p_rows: batch });
+        if (error) throw error;
+        sent += batch.length; batch = [];
+        const pct = u.rowsCount ? Math.round(sent / u.rowsCount * 100) : 100;
+        bar.style.width = pct + '%';
+        progText.textContent = 'Uploaded ' + sent.toLocaleString() + ' of ' + u.rowsCount.toLocaleString() + ' rows (' + pct + '%)';
+      }
+      try {
+        const { data: id, error } = await sb.rpc('start_run_upload', {
+          p_run: state.run.id, p_kind: cfg.kind, p_file_name: u.file.name,
+          p_sheet_name: sheetSel.value, p_header_row: u.headerRow + 1, p_column_map: colMap
+        });
+        if (error) throw error;
+        uploadId = id;
+        for (const p of dataRows()) {
+          batch.push(p.row);
+          if (batch.length >= CHUNK) await flush();
+        }
+        await flush();
+        const { error: finErr } = await sb.rpc('finish_run_upload', { p_upload: uploadId });
+        if (finErr) throw finErr;
+        showMsg(cfg.label + ': uploaded ' + sent.toLocaleString() + ' rows from "' + u.file.name + '".', 'ok');
+        renderSlots();
+      } catch (err) {
+        if (uploadId) await sb.rpc('fail_run_upload', { p_upload: uploadId });
+        showMsg(cfg.label + ' upload failed after ' + sent.toLocaleString() + ' rows: ' + (err.message || err) +
+                '. This upload will not be used. Please try again.', 'err');
+        renderSlots();
+      }
+    });
+  }
+
+  // ---------- events ----------
+  $('branchFilter').addEventListener('change', function(){ state.runsOffset = 0; loadRuns(); });
+  $('runsPrev').addEventListener('click', function(){ state.runsOffset = Math.max(0, state.runsOffset - RUNS_PAGE); loadRuns(); });
+  $('runsNext').addEventListener('click', function(){ state.runsOffset += RUNS_PAGE; loadRuns(); });
+
+  await loadBranches();
+  await loadRuns();
+  // Link mula sa Dashboard: import.html?run=<id>
+  const deepRun = new URLSearchParams(location.search).get('run');
+  if (deepRun && /^[0-9a-f-]{36}$/i.test(deepRun)) openRun(deepRun);
+})();
+</script>
+</body>
+</html>

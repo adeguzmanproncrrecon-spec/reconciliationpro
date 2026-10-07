@@ -1,0 +1,9 @@
+.env
+.env.*
+node_modules/
+data/
+*.csv
+*.xlsx
+*.xls
+# Kailangan ng system ang Annex A template (malinis, walang tunay na data)
+!templates/annex-a.xlsx

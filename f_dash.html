@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Facility Dashboard — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#141B22;
+    --ink-soft:#1F2932;
+    --paper:#F3F4F1;
+    --paper-raised:#FFFFFF;
+    --teal:#1C4A47;
+    --teal-light:#2E6B66;
+    --brass:#B8863B;
+    --brass-soft:#E8D3AA;
+    --rust:#A8432C;
+    --slate:#5B6670;
+    --line:#DADDD7;
+
+    /* status colors */
+    --st-process:#3E5C76;  --st-process-bg:#EAF0F5;
+    --st-payment:#1C4A47;  --st-payment-bg:#E6EFEC;
+    --st-rth:#8A6224;      --st-rth-bg:#F7EEDD;
+    --st-denied:#A8432C;   --st-denied-bg:#FBEAE6;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--paper-raised);
+    color:var(--ink);
+    padding:28px;
+  }
+
+  /* ---------- SUMMARY (doubles as tabs) ---------- */
+  .summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:14px;
+    margin-bottom:28px;
+  }
+  .stat{
+    text-align:left;
+    font-family:inherit;
+    color:inherit;
+    background:var(--paper-raised);
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px 15px;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .stat::before{
+    content:'';
+    position:absolute; left:0; top:0; bottom:0;
+    width:4px;
+    background:var(--c);
+  }
+  .stat:hover{ border-color:#C3C8C1; }
+  .stat:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+  .stat.active{ border-color:var(--c); background:var(--bg); }
+  .stat .label{
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; font-weight:600;
+    color:var(--c);
+  }
+  .stat .count{
+    display:block;
+    font-family:'Fraunces',serif;
+    font-size:32px;
+    font-weight:500;
+    line-height:1.1;
+    margin:8px 0 2px;
+    color:var(--ink);
+  }
+  .stat .amount{ font-size:13px; color:var(--slate); }
+
+  .s-process{ --c:var(--st-process); --bg:var(--st-process-bg); }
+  .s-payment{ --c:var(--st-payment); --bg:var(--st-payment-bg); }
+  .s-rth    { --c:var(--st-rth);     --bg:var(--st-rth-bg); }
+  .s-denied { --c:var(--st-denied);  --bg:var(--st-denied-bg); }
+
+  /* ---------- TABS ---------- */
+  .tabs-row{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .tabs{ display:flex; gap:4px; overflow-x:auto; }
+  .tab{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:600;
+    color:var(--slate);
+    background:none;
+    border:none;
+    border-bottom:2.5px solid transparent;
+    padding:10px 14px 11px;
+    cursor:pointer;
+    white-space:nowrap;
+    display:flex; align-items:center; gap:8px;
+  }
+  .tab:hover{ color:var(--ink); }
+  .tab:focus-visible{ outline:2px solid var(--teal); outline-offset:-2px; border-radius:6px 6px 0 0; }
+  .tab.active{ color:var(--c); border-bottom-color:var(--c); }
+  .tab .pill{
+    font-size:11.5px;
+    font-weight:700;
+    min-width:22px;
+    padding:2px 7px;
+    border-radius:20px;
+    background:var(--paper);
+    color:var(--slate);
+    text-align:center;
+  }
+  .tab.active .pill{ background:var(--bg); color:var(--c); }
+
+  .search{
+    position:relative;
+    margin-bottom:8px;
+  }
+  .search svg{
+    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+    width:16px; height:16px; color:#9AA0A0;
+  }
+  .search input{
+    width:260px;
+    padding:9px 12px 9px 34px;
+    font-family:inherit;
+    font-size:13.5px;
+    border:1.5px solid var(--line);
+    border-radius:8px;
+    outline:none;
+  }
+  .search input:focus{ border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+
+  .tab-note{
+    font-size:13.5px;
+    color:var(--slate);
+    margin:0 0 14px;
+    line-height:1.5;
+  }
+  .tab-note strong{ color:var(--ink-soft); }
+
+  /* ---------- TABLE ---------- */
+  .table-wrap{
+    overflow-x:auto;
+    border:1px solid var(--line);
+    border-radius:10px;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+    min-width:820px;
+  }
+  thead th{
+    text-align:left;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--slate);
+    background:#F8F9F6;
+    padding:11px 16px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:13px 16px;
+    border-bottom:1px solid #ECEEEA;
+    vertical-align:top;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover td{ background:#FAFBF9; }
+  td.date{ white-space:nowrap; }
+  td.extra{ min-width:220px; }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  th.num{ text-align:right; }
+  .claim-no{ white-space:nowrap; font-weight:600; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .due-soon{ color:var(--st-denied); font-weight:600; }
+
+  .badge{
+    display:inline-block;
+    font-size:12px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:20px;
+    background:var(--bg);
+    color:var(--c);
+    white-space:nowrap;
+  }
+
+  .empty{
+    text-align:center;
+    padding:48px 20px;
+    color:var(--slate);
+    font-size:14px;
+  }
+
+  @media (max-width: 900px){
+    body{ padding:16px; }
+    .summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .search input{ width:100%; }
+    .search{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Summary cards: pindutin para lumipat ng tab -->
+  <section class="summary" id="summary"></section>
+
+  <div class="tabs-row">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="searchInput" placeholder="Search claim no. or patient" aria-label="Search claims">
+    </label>
+  </div>
+
+  <p class="tab-note" id="tabNote"></p>
+
+  <div class="table-wrap">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+<script>
+  /* ---------- STATUS CONFIG ---------- */
+  const STATUSES = {
+    process: {
+      label:'In Process', cls:'s-process',
+      note:'Claims PhilHealth is still evaluating. No action needed from you yet.',
+      extraHead:'Current stage',
+      extra:c => `<span class="badge s-process">${c.stage}</span>`
+    },
+    payment: {
+      label:'For Payment', cls:'s-payment',
+      note:'Approved claims waiting for release of payment.',
+      extraHead:'Approved amount',
+      extra:c => `<strong>${peso(c.approved)}</strong>`,
+      extraNum:true
+    },
+    rth: {
+      label:'Return to Hospital', cls:'s-rth',
+      note:'<strong>Action needed:</strong> these claims were returned for missing or incorrect documents. Comply before the deadline to avoid denial.',
+      extraHead:'Reason / Comply by',
+      extra:c => `${esc(c.reason)}<div class="muted ${daysLeft(c.deadline) <= 7 ? 'due-soon' : ''}">Comply by ${fmtDate(c.deadline)} · ${daysLeft(c.deadline)} days left</div>`
+    },
+    denied: {
+      label:'Denied', cls:'s-denied',
+      note:'Claims PhilHealth denied. You may file a Motion for Reconsideration if you disagree with the decision.',
+      extraHead:'Denial reason',
+      extra:c => esc(c.reason)
+    }
+  };
+  const ORDER = ['process','payment','rth','denied'];
+
+  /* ---------- SAMPLE DATA (papalitan ng Supabase query) ---------- */
+  const claims = [
+    { no:'2026-0918-00412', patient:'Dela Cruz, Juan M.',     pkg:'Community-Acquired Pneumonia', adm:'2026-08-28', dis:'2026-09-02', filed:'2026-09-10', amount:15000, status:'process', stage:'Evaluation' },
+    { no:'2026-0918-00419', patient:'Santos, Maria L.',       pkg:'Normal Spontaneous Delivery',  adm:'2026-09-01', dis:'2026-09-03', filed:'2026-09-12', amount:6500,  status:'process', stage:'Received' },
+    { no:'2026-0918-00433', patient:'Reyes, Antonio B.',      pkg:'Acute Gastroenteritis',       adm:'2026-09-05', dis:'2026-09-08', filed:'2026-09-15', amount:6000,  status:'process', stage:'Evaluation' },
+    { no:'2026-0918-00451', patient:'Garcia, Liza P.',        pkg:'Dengue Fever',                adm:'2026-09-07', dis:'2026-09-11', filed:'2026-09-18', amount:13000, status:'process', stage:'Audit' },
+    { no:'2026-0828-00287', patient:'Mendoza, Carlo R.',      pkg:'Cesarean Section',            adm:'2026-08-10', dis:'2026-08-14', filed:'2026-08-20', amount:19000, approved:19000, status:'payment' },
+    { no:'2026-0828-00291', patient:'Bautista, Rosa T.',      pkg:'Urinary Tract Infection',     adm:'2026-08-12', dis:'2026-08-15', filed:'2026-08-21', amount:8000,  approved:8000,  status:'payment' },
+    { no:'2026-0828-00305', patient:'Villanueva, Pedro S.',   pkg:'Hypertensive Urgency',        adm:'2026-08-15', dis:'2026-08-17', filed:'2026-08-24', amount:9000,  approved:9000,  status:'payment' },
+    { no:'2026-0905-00350', patient:'Aquino, Teresa D.',      pkg:'Community-Acquired Pneumonia', adm:'2026-08-20', dis:'2026-08-25', filed:'2026-09-01', amount:15000, status:'rth', reason:'Missing Clinical Abstract (CF4)', deadline:'2026-10-06' },
+    { no:'2026-0905-00362', patient:'Ramos, Eduardo F.',      pkg:'Acute Gastroenteritis',       adm:'2026-08-22', dis:'2026-08-24', filed:'2026-09-03', amount:6000,  status:'rth', reason:'Patient signature missing on CF1', deadline:'2026-10-21' },
+    { no:'2026-0812-00198', patient:'Torres, Angelica M.',    pkg:'Dengue Fever',                adm:'2026-07-28', dis:'2026-08-01', filed:'2026-08-08', amount:13000, status:'denied', reason:'Filed beyond the 60-day filing period' },
+    { no:'2026-0812-00203', patient:'Flores, Ramon C.',       pkg:'Pneumonia, High Risk',        adm:'2026-07-30', dis:'2026-08-06', filed:'2026-08-10', amount:32000, status:'denied', reason:'Member not eligible on date of admission' }
+  ];
+
+  /* ---------- HELPERS ---------- */
+  const peso = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits:2 });
+  // MM/DD/YYYY (docs/DEVELOPER_NOTES.md: Petsa sa UI)
+  const fmtDate = d => { const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; };
+  const daysLeft = d => Math.ceil((new Date(d + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+  let current = 'process';
+  let query = '';
+
+  /* ---------- RENDER ---------- */
+  function renderSummary(){
+    document.getElementById('summary').innerHTML = ORDER.map(key => {
+      const s = STATUSES[key];
+      const list = claims.filter(c => c.status === key);
+      const total = list.reduce((sum, c) => sum + (c.approved ?? c.amount), 0);
+      return `<button class="stat ${s.cls} ${key === current ? 'active' : ''}" data-status="${key}">
+                <span class="label">${s.label}</span>
+                <span class="count">${list.length}</span>
+                <span class="amount">${peso(total)}</span>
+              </button>`;
+    }).join('');
+  }
+
+  function renderTabs(){
+    document.getElementById('tabs').innerHTML = ORDER.map(key => {
+      const s = STATUSES[key];
+      const n = claims.filter(c => c.status === key).length;
+      return `<button class="tab ${s.cls} ${key === current ? 'active' : ''}" role="tab"
+                aria-selected="${key === current}" data-status="${key}">
+                ${s.label}<span class="pill">${n}</span>
+              </button>`;
+    }).join('');
+  }
+
+  function renderTable(){
+    const s = STATUSES[current];
+    document.getElementById('tabNote').innerHTML = s.note;
+    document.getElementById('thead').innerHTML = `<tr>
+      <th>Claim no.</th><th>Patient</th><th>Case / Package</th>
+      <th>Confinement</th><th>Date filed</th><th class="num">Claim amount</th>
+      <th class="${s.extraNum ? 'num' : ''}">${s.extraHead}</th></tr>`;
+
+    const q = query.toLowerCase();
+    const rows = claims
+      .filter(c => c.status === current)
+      .filter(c => !q || c.no.toLowerCase().includes(q) || c.patient.toLowerCase().includes(q));
+
+    document.getElementById('tbody').innerHTML = rows.length
+      ? rows.map(c => `<tr>
+          <td class="claim-no">${esc(c.no)}</td>
+          <td>${esc(c.patient)}</td>
+          <td>${esc(c.pkg)}</td>
+          <td class="date">${fmtDate(c.adm)}<div class="muted">to ${fmtDate(c.dis)}</div></td>
+          <td class="date">${fmtDate(c.filed)}</td>
+          <td class="num">${peso(c.amount)}</td>
+          <td class="${s.extraNum ? 'num' : 'extra'}">${s.extra(c)}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="7" class="empty">${q ? 'No claims match your search in this tab.' : 'No ' + s.label + ' claims right now.'}</td></tr>`;
+  }
+
+  function show(status){
+    current = status;
+    renderSummary(); renderTabs(); renderTable();
+  }
+
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-status]');
+    if (btn) show(btn.dataset.status);
+  });
+  document.getElementById('searchInput').addEventListener('input', e => {
+    query = e.target.value.trim();
+    renderTable();
+  });
+
+  show('process');
+</script>
+</body>
+</html>

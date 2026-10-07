@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Staff Accounts — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility_admin"></script>
+<style>
+  :root{
+    --ink:#141B22;
+    --ink-soft:#1F2932;
+    --paper:#F3F4F1;
+    --paper-raised:#FFFFFF;
+    --teal:#1C4A47;
+    --teal-light:#2E6B66;
+    --rust:#A8432C;
+    --slate:#5B6670;
+    --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--paper-raised);
+    color:var(--ink);
+    padding:28px;
+  }
+
+  .tabs-row{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:16px;
+    border-bottom:1px solid var(--line); margin-bottom:18px; flex-wrap:wrap;
+  }
+  .tabs{ display:flex; gap:4px; overflow-x:auto; }
+  .tab{
+    font-family:inherit; font-size:14px; font-weight:600; color:var(--slate);
+    background:none; border:none; border-bottom:2.5px solid transparent;
+    padding:10px 14px 11px; cursor:pointer; white-space:nowrap;
+    display:flex; align-items:center; gap:8px;
+  }
+  .tab:hover{ color:var(--ink); }
+  .tab:focus-visible{ outline:2px solid var(--teal); outline-offset:-2px; border-radius:6px 6px 0 0; }
+  .tab.active{ color:var(--teal); border-bottom-color:var(--teal); }
+  .tab .pill{
+    font-size:11.5px; font-weight:700; min-width:22px; padding:2px 7px;
+    border-radius:20px; background:var(--paper); color:var(--slate); text-align:center;
+  }
+  .tab.active .pill{ background:#E6EFEC; color:var(--teal); }
+
+  .search input{
+    width:260px; padding:9px 12px; margin-bottom:8px;
+    font-family:inherit; font-size:13.5px;
+    border:1.5px solid var(--line); border-radius:8px; outline:none;
+  }
+  .search input:focus{ border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+
+  .acct-msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:16px; }
+  .acct-msg.show{ display:block; }
+  .acct-msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .acct-msg.err{ background:#FBEAE6; color:var(--rust); }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th{
+    text-align:left; font-size:12px; font-weight:600; color:var(--slate);
+    background:var(--paper); padding:10px 14px; white-space:nowrap;
+  }
+  td{ padding:12px 14px; border-top:1px solid var(--line); vertical-align:middle; }
+  .name{ font-weight:600; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .nowrap{ white-space:nowrap; }
+  .empty{ padding:28px; text-align:center; color:var(--slate); font-size:14px; }
+
+  .actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn{
+    font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    padding:7px 12px; border-radius:7px; border:1.5px solid var(--line);
+    background:var(--paper-raised); color:var(--ink);
+  }
+  .btn:hover{ border-color:#C3C8C1; }
+  .btn-ok{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; }
+  .btn-ok:hover{ background:var(--teal-light); border-color:var(--teal-light); }
+  .btn-danger{ color:var(--rust); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .role-select{
+    font-family:inherit; font-size:13px; padding:6px 8px;
+    border:1.5px solid var(--line); border-radius:7px; background:var(--paper-raised); color:var(--ink);
+  }
+
+  .chips{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .chip{
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:12px; font-weight:600; padding:3px 8px; border-radius:20px;
+    background:var(--paper); color:var(--ink-soft);
+  }
+  .chip-x{
+    border:none; background:none; cursor:pointer; color:var(--slate);
+    font-size:14px; line-height:1; padding:0 0 0 2px;
+  }
+  .chip-x:hover{ color:var(--rust); }
+  .btn-link{
+    border:none; background:none; cursor:pointer; font-family:inherit;
+    font-size:12.5px; font-weight:600; color:var(--teal); padding:2px 4px;
+  }
+  .btn-link:hover{ text-decoration:underline; }
+
+  /* Walang branch assignment sa facility side */
+  td:nth-child(4){ display:none; }
+
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:14px; font-size:13px; color:var(--slate); }
+
+  @media (max-width: 640px){
+    body{ padding:16px; }
+    .search input{ width:100%; }
+    .search{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="tabs-row">
+    <div class="tabs" id="acctTabs" role="tablist">
+      <button class="tab active" type="button" role="tab" aria-selected="true" data-status="pending">Pending <span class="pill">0</span></button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-status="active">Active <span class="pill">0</span></button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-status="disabled">Disabled <span class="pill">0</span></button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-status="rejected">Rejected <span class="pill">0</span></button>
+    </div>
+    <div class="search">
+      <input type="search" id="acctSearch" placeholder="Search name or email" aria-label="Search name or email">
+    </div>
+  </div>
+
+  <div class="acct-msg" id="acctMsg" role="status" aria-live="polite"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th>Facility</th>
+          <th>Role</th>
+          <th>Registered</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="acctBody"></tbody>
+    </table>
+    <div class="empty" id="acctEmpty" hidden>No accounts here.</div>
+  </div>
+
+  <div class="pager">
+    <span id="acctRange"></span>
+    <button class="btn" type="button" id="acctPrev" disabled>Previous</button>
+    <button class="btn" type="button" id="acctNext" disabled>Next</button>
+  </div>
+
+<script src="js/accounts.js"></script>
+</body>
+</html>

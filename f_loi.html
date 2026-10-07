@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Letter of Intent — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility,facility_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:170px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field input, .field textarea{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .field textarea{ min-height:70px; resize:vertical; }
+  .field input:focus, .field textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+  .btn{ font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; padding:8px 14px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; }
+  .btn-primary:hover{ background:var(--teal-light); }
+  .btn-sm{ font-size:12.5px; padding:5px 10px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .note{ background:var(--paper); border-radius:8px; padding:12px 14px; font-size:13px; color:var(--slate); line-height:1.5; }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); vertical-align:middle; }
+  td.nowrap{ white-space:nowrap; }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  .status{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; background:#E2EEEC; color:var(--teal); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="card">
+    <h2>Letter of Intent</h2>
+    <p class="sub">Submit your facility's Letter of Intent (LOI) here instead of sending it by email. The LOI tells PhilHealth
+      that the claims you uploaded are the complete list for the reconciliation period (cut-off).</p>
+
+    <div id="form" hidden>
+      <div class="row">
+        <div class="field"><label for="letterDate">Date of the letter *</label>
+          <input type="text" class="mdy" id="letterDate" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+        <div class="field"><label for="covStart">Coverage start *</label>
+          <input type="text" class="mdy" id="covStart" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+        <div class="field"><label for="covEnd">Coverage end (cut-off) *</label>
+          <input type="text" class="mdy" id="covEnd" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1; min-width:260px"><label for="remarks">Remarks</label>
+          <textarea id="remarks" maxlength="1000" placeholder="Optional"></textarea></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="file">Signed letter (PDF, JPG or PNG, up to 10 MB) *</label>
+          <input type="file" id="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"></div>
+        <button class="btn btn-primary" type="button" id="submitBtn">Submit Letter of Intent</button>
+      </div>
+      <p class="muted" style="margin:0">A submitted LOI cannot be edited or deleted. If something is wrong, submit a new one; PhilHealth uses the latest.</p>
+    </div>
+    <div class="note" id="staffNote" hidden>Only your Facility Admin can submit a Letter of Intent. You can view the submitted letters below.</div>
+  </div>
+
+  <div class="card">
+    <h2>Submitted letters</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Submitted</th><th>Date of letter</th><th>Coverage</th><th>File</th><th>Remarks</th><th></th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden>No Letter of Intent submitted yet.</div>
+    </div>
+    <div class="pager"><span id="listRange"></span>
+      <button class="btn btn-sm" type="button" id="listPrev" disabled>Previous</button>
+      <button class="btn btn-sm" type="button" id="listNext" disabled>Next</button></div>
+  </div>
+
+<script>
+(async function(){
+  const PAGE = 10, MAX_BYTES = 10 * 1024 * 1024;
+  const TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { offset: 0 };
+  const me = await window.sbUserReady;
+  const isAdmin = me.role === 'facility_admin';
+  $('form').hidden = !isAdmin;
+  $('staffNote').hidden = isAdmin;
+
+  // ---------- helpers ----------
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function td(t, cls){ return h('td', { class: cls || '', text: t === null || t === undefined || t === '' ? '—' : String(t) }); }
+  function showMsg(t, k){ const m = $('msg'); m.textContent = t; m.className = 'msg show ' + k; m.scrollIntoView({ block: 'nearest' }); }
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  // "MM/DD/YYYY" → "YYYY-MM-DD"; '' → null; mali → undefined
+  function mdyToIso(v){
+    v = (v || '').trim();
+    if (!v) return null;
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return undefined;
+    const mm = +m[1], dd = +m[2], yy = +m[3];
+    const dt = new Date(Date.UTC(yy, mm - 1, dd));
+    if (yy < 1990 || yy > 2100 || dt.getUTCMonth() !== mm - 1 || dt.getUTCDate() !== dd) return undefined;
+    return yy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
+  }
+  document.querySelectorAll('input.mdy').forEach(function(inp){
+    inp.addEventListener('input', function(){
+      const d = inp.value.replace(/\D/g, '').slice(0, 8);
+      inp.value = d.length > 4 ? d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4) : d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+    });
+  });
+
+  // ---------- listahan (RLS: sariling facility lang) ----------
+  async function loadList(){
+    const { data, error, count } = await sb.from('facility_lois')
+      .select('id, letter_date, coverage_start, coverage_end, remarks, file_path, file_name, submitted_at', { count: 'exact' })
+      .order('submitted_at', { ascending: false })
+      .range(state.offset, state.offset + PAGE - 1);
+    const body = $('listBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load letters: ' + error.message, 'err'); return; }
+    data.forEach(function(l, i){
+      body.append(h('tr', {}, [
+        td(fmtTs(l.submitted_at), 'nowrap'), td(fmtDate(l.letter_date), 'nowrap'),
+        td(fmtDate(l.coverage_start) + ' – ' + fmtDate(l.coverage_end), 'nowrap'),
+        h('td', { class: 'nowrap' }, [h('button', { class: 'btn btn-sm', type: 'button', text: l.file_name, onclick: function(){ download(l.file_path); } })]),
+        td(l.remarks),
+        h('td', {}, [state.offset === 0 && i === 0 ? h('span', { class: 'status', text: 'latest' }) : null])
+      ]));
+    });
+    $('listEmpty').hidden = data.length > 0;
+    const total = count || 0;
+    $('listRange').textContent = total ? (state.offset + 1) + '–' + (state.offset + data.length) + ' of ' + total : '';
+    $('listPrev').disabled = state.offset === 0;
+    $('listNext').disabled = state.offset + data.length >= total;
+  }
+
+  async function download(path){
+    const { data, error } = await sb.storage.from('loi').createSignedUrl(path, 120);
+    if (error) { showMsg('Could not open the file: ' + error.message, 'err'); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  }
+
+  // ---------- pagsumite (Facility Admin) ----------
+  $('submitBtn').addEventListener('click', async function(){
+    const letter = mdyToIso($('letterDate').value), start = mdyToIso($('covStart').value), end = mdyToIso($('covEnd').value);
+    if (!letter || !start || !end) { showMsg('Enter the date of the letter and the coverage start and end in MM/DD/YYYY format.', 'err'); return; }
+    if (start > end) { showMsg('Coverage start must be on or before the coverage end.', 'err'); return; }
+    const file = $('file').files[0];
+    if (!file) { showMsg('Choose the signed letter to upload.', 'err'); return; }
+    const ext = TYPES[file.type];
+    if (!ext) { showMsg('The file must be a PDF, JPG or PNG.', 'err'); return; }
+    if (file.size > MAX_BYTES) { showMsg('The file is larger than 10 MB.', 'err'); return; }
+    if (!confirm('Submit this Letter of Intent (coverage ' + $('covStart').value + ' – ' + $('covEnd').value + ')? It cannot be edited after submitting.')) return;
+
+    const btn = this; btn.disabled = true;
+    try {
+      // 1) I-upload ang file sa folder ng sariling facility; 2) itala ang LOI
+      const path = me.facilityId + '/' + crypto.randomUUID() + '.' + ext;
+      const up = await sb.storage.from('loi').upload(path, file, { contentType: file.type, upsert: false });
+      if (up.error) throw up.error;
+      const { error } = await sb.rpc('submit_loi', {
+        p_letter_date: letter, p_coverage_start: start, p_coverage_end: end,
+        p_remarks: $('remarks').value, p_file_path: path, p_file_name: file.name.slice(0, 255), p_file_size: file.size
+      });
+      if (error) throw error;
+      ['letterDate', 'covStart', 'covEnd', 'remarks'].forEach(function(id){ $(id).value = ''; });
+      $('file').value = '';
+      showMsg('Letter of Intent submitted. PhilHealth can now see it.', 'ok');
+      state.offset = 0;
+      loadList();
+    } catch (err) {
+      showMsg('Could not submit: ' + (err.message || err), 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  $('listPrev').addEventListener('click', function(){ state.offset = Math.max(0, state.offset - PAGE); loadList(); });
+  $('listNext').addEventListener('click', function(){ state.offset += PAGE; loadList(); });
+
+  loadList();
+})();
+</script>
+</body>
+</html>

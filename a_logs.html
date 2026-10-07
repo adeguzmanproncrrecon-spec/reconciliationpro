@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>System Logs — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,branch_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+    --st-process:#3E5C76; --st-process-bg:#EAF0F5;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:150px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .btn{ font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:7px 12px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); }
+  .btn:hover{ border-color:#C3C8C1; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); vertical-align:top; }
+  td.nowrap{ white-space:nowrap; }
+  td a{ color:var(--teal); }
+  .tag{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; display:inline-block; }
+  .c-account{ background:#EAF0F5; color:var(--st-process); }
+  .c-upload{ background:#E2EEEC; color:var(--teal); }
+  .c-recon{ background:#F7EEDD; color:var(--amber); }
+  .c-fail{ background:#FBEAE6; color:var(--rust); }
+  .c-other{ background:var(--paper); color:var(--slate); }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="card">
+    <h2>System Logs</h2>
+    <p class="sub" id="scopeNote">Important actions in the system: accounts, uploads, recon runs, matching, Letters of Intent,
+      templates and exports. Entries cannot be edited or deleted.</p>
+    <div class="row">
+      <div class="field"><label for="fCat">Type</label>
+        <select id="fCat">
+          <option value="">All</option>
+          <option value="account">Accounts</option>
+          <option value="upload">Uploads</option>
+          <option value="recon">Recon runs and matching</option>
+          <option value="loi">Letters of Intent</option>
+          <option value="template">Templates and settings</option>
+          <option value="export">Exports</option>
+          <option value="fail">Failures only</option>
+        </select></div>
+      <div class="field" id="branchWrap" hidden><label for="fBranch">Branch</label><select id="fBranch"></select></div>
+      <div class="field"><label for="fFrom">From</label>
+        <input type="text" class="mdy" id="fFrom" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field"><label for="fTo">To</label>
+        <input type="text" class="mdy" id="fTo" placeholder="MM/DD/YYYY" inputmode="numeric" maxlength="10"></div>
+      <div class="field" style="min-width:220px"><label for="fSearch">Search</label>
+        <input type="search" id="fSearch" placeholder="Person or facility" autocomplete="off"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date and time</th><th>By</th><th>Action</th><th>Facility / account</th><th>Details</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden>No log entries found.</div>
+    </div>
+    <div class="pager"><span id="listRange"></span>
+      <button class="btn" type="button" id="listPrev" disabled>Previous</button>
+      <button class="btn" type="button" id="listNext" disabled>Next</button></div>
+  </div>
+
+<script>
+(async function(){
+  const PAGE = 50;
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { offset: 0 };
+  const me = await window.sbUserReady;
+  const isFinmarep = me.role === 'finmarep';
+
+  // action → [label, category]
+  const ACTIONS = {
+    account_registered: ['Account registered', 'account'], account_approved: ['Account approved', 'account'],
+    account_rejected: ['Account rejected', 'account'], account_disabled: ['Account disabled', 'account'],
+    account_enabled: ['Account enabled', 'account'], account_changed: ['Account role / assignment changed', 'account'],
+    account_status_changed: ['Account status changed', 'account'],
+    branch_assigned: ['Branch assigned', 'account'], branch_removed: ['Branch removed', 'account'],
+    hf_ics_uploaded: ['HF ICS uploaded', 'upload'], hf_ics_upload_failed: ['HF ICS upload failed', 'upload'],
+    extraction_uploaded: ['Extraction uploaded', 'upload'], extraction_upload_failed: ['Extraction upload failed', 'upload'],
+    extraction_discarded: ['Extraction discarded', 'upload'],
+    recon_run_created: ['Recon run created', 'recon'], recon_run_updated: ['Recon run updated', 'recon'],
+    matching_requested: ['Matching started', 'recon'], matching_done: ['Matching finished', 'recon'],
+    matching_failed: ['Matching failed', 'recon'],
+    loi_submitted: ['Letter of Intent submitted', 'loi'],
+    template_uploaded: ['Template uploaded', 'template'], template_updated: ['Template changed', 'template'],
+    export_annex_a: ['Annex A exported', 'export'], export_matching_report: ['Matching Report exported', 'export'],
+    setting_changed: ['System setting changed', 'template']
+  };
+  const SETTING_LABELS = { annex_reviewed_position: 'Annex A – Reviewed by (position)',
+                           annex_certified_position: 'Annex A – Certified Correct (position)',
+                           annex_acknowledged_position: 'Annex A – Acknowledged by (position)' };
+  const FAILS = ['hf_ics_upload_failed', 'extraction_upload_failed', 'matching_failed'];
+  const KINDS = { ho_ics: 'HO ICS', raw_matching: 'Raw Matching', status_trail: 'Status Trail', payment_details: 'Payment Details',
+                  rth_reasons: 'RTH/Denial Reasons', mr_records: 'Motion for Reconsideration', pard_records: 'PARD',
+                  pf_names: 'PF Name', issue_tags: 'Tagging of Issue', issue_untags: 'Untagging of Issue', icd_codes: 'ICD Codes',
+                  claim_type: 'Type of Claim' };
+
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()) + ':' + z(t.getSeconds()); }
+  function n(v){ return v === null || v === undefined ? '—' : Number(v).toLocaleString(); }
+  function showErr(t){ const m = $('msg'); m.textContent = t; m.className = 'msg show err'; }
+  function clearMsg(){ $('msg').className = 'msg'; }
+  // "MM/DD/YYYY" → Date (lokal na hatinggabi); '' → null; mali → undefined
+  function mdyToDate(v){
+    v = (v || '').trim(); if (!v) return null;
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (!m) return undefined;
+    const d = new Date(+m[3], +m[1] - 1, +m[2]);
+    return d.getMonth() === +m[1] - 1 && d.getDate() === +m[2] ? d : undefined;
+  }
+  document.querySelectorAll('input.mdy').forEach(function(inp){
+    inp.addEventListener('input', function(){
+      const d = inp.value.replace(/\D/g, '').slice(0, 8);
+      inp.value = d.length > 4 ? d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4) : d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+    });
+  });
+
+  // Paglalarawan ng details (text lang)
+  function describe(r){
+    const d = r.details || {};
+    switch (r.action) {
+      case 'account_registered': return 'Requested position: ' + (window.sbRoleLabel[d.requested_role] || d.requested_role || '—');
+      case 'account_approved': case 'account_enabled': case 'account_changed':
+        return 'Role: ' + (window.sbRoleLabel[d.role] || d.role || '—') + (d.old_role ? ' (was ' + (window.sbRoleLabel[d.old_role] || d.old_role) + ')' : '');
+      case 'account_rejected': case 'account_disabled': case 'account_status_changed':
+        return 'Status: ' + (d.from_status || '—') + ' → ' + (d.to_status || '—');
+      case 'hf_ics_uploaded': case 'hf_ics_upload_failed':
+        return (d.file_name || '') + ' · ' + n(d.rows) + ' rows' + (d.invalid_series ? ' · ' + n(d.invalid_series) + ' invalid claim series' : '');
+      case 'extraction_uploaded': case 'extraction_upload_failed': case 'extraction_discarded':
+        return (KINDS[d.kind] || d.kind || '') + ' · ' + (d.file_name || '') + (d.rows !== undefined ? ' · ' + n(d.rows) + ' rows' : '');
+      case 'recon_run_created': case 'recon_run_updated':
+        return 'Report date ' + fmtDate(d.report_date) + ' · matching date ' + fmtDate(d.matching_date) +
+               (d.coverage_start || d.coverage_end ? ' · LOI coverage ' + fmtDate(d.coverage_start) + ' – ' + fmtDate(d.coverage_end) : '') +
+               (d.hf_ics_changed ? ' · HF ICS changed' : '');
+      case 'matching_requested': return 'Report date ' + fmtDate(d.report_date) + ' · matching date ' + fmtDate(d.matching_date);
+      case 'matching_done': return d.seconds !== undefined ? 'Took ' + Math.floor(d.seconds / 60) + ' min ' + (d.seconds % 60) + ' s' : '';
+      case 'matching_failed': return d.error || '';
+      case 'loi_submitted': return 'Letter dated ' + fmtDate(d.letter_date) + ' · coverage ' + fmtDate(d.coverage_start) + ' – ' + fmtDate(d.coverage_end) + ' · ' + (d.file_name || '');
+      case 'template_uploaded': case 'template_updated':
+        return (d.name || '') + ' · ' + (d.active === false ? 'retired' : 'active') + ' · ' + (d.visible_to_facility ? 'visible to facilities' : 'PhilHealth only');
+      case 'setting_changed':
+        return (SETTING_LABELS[d.key] || d.key || '') + ': “' + (d.from || '') + '” → “' + (d.to || '') + '”';
+      case 'branch_assigned': case 'branch_removed': return d.branch ? 'Branch ' + d.branch : '';
+      case 'export_annex_a': case 'export_matching_report':
+        return (d.version === 'internal' ? 'Internal' : 'Facility version') + ' · as of ' + fmtDate(d.report_date);
+      default: return JSON.stringify(d);
+    }
+  }
+
+  // ---------- branch filter (FINMAREP lang; Branch Admin = sariling branch lang sa RLS) ----------
+  if (isFinmarep) {
+    const { data: br } = await sb.from('branches').select('id, code, name').order('name');
+    const sel = $('fBranch');
+    sel.add(new Option('All branches', ''));
+    (br || []).forEach(function(b){ sel.add(new Option(b.name + ' (' + b.code + ')', b.id)); });
+    $('branchWrap').hidden = false;
+  } else {
+    $('scopeNote').textContent += ' You see the entries of your branch only.';
+  }
+
+  async function load(){
+    clearMsg();
+    const from = mdyToDate($('fFrom').value), to = mdyToDate($('fTo').value);
+    if (from === undefined || to === undefined) { showErr('Enter dates in MM/DD/YYYY format.'); return; }
+    let q = sb.from('audit_log')
+      .select('id, at, actor_name, actor_role, action, facility_name, target_name, run_id, details', { count: 'exact' })
+      .order('at', { ascending: false }).order('id', { ascending: false })
+      .range(state.offset, state.offset + PAGE - 1);
+    const cat = $('fCat').value;
+    if (cat === 'fail') q = q.in('action', FAILS);
+    else if (cat) q = q.in('action', Object.keys(ACTIONS).filter(function(a){ return ACTIONS[a][1] === cat; }));
+    if (isFinmarep && $('fBranch').value) q = q.eq('branch_id', $('fBranch').value);
+    if (from) q = q.gte('at', from.toISOString());
+    if (to) q = q.lt('at', new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1).toISOString());
+    // Alisin ang mga character na may espesyal na kahulugan sa PostgREST filter
+    const s = $('fSearch').value.replace(/[,()%*\\:."']/g, ' ').trim();
+    if (s.length >= 2) q = q.or('actor_name.ilike.*' + s + '*,target_name.ilike.*' + s + '*,facility_name.ilike.*' + s + '*');
+
+    const { data, error, count } = await q;
+    const body = $('listBody'); body.replaceChildren();
+    if (error) { showErr('Could not load the logs: ' + error.message); return; }
+    data.forEach(function(r){
+      const a = ACTIONS[r.action] || [r.action, 'other'];
+      const cls = FAILS.includes(r.action) ? 'c-fail' : 'c-' + ({ account: 'account', upload: 'upload', recon: 'recon' }[a[1]] || 'other');
+      const who = r.actor_name
+        ? [h('div', { text: r.actor_name }), h('div', { class: 'muted', text: window.sbRoleLabel[r.actor_role] || r.actor_role || '' })]
+        : [h('div', { class: 'muted', text: r.action === 'account_registered' ? (r.target_name || 'Self-registration') : 'System' })];
+      const subject = [];
+      if (r.facility_name) subject.push(h('div', { text: r.facility_name }));
+      if (r.target_name) subject.push(h('div', { class: r.facility_name ? 'muted' : '', text: r.target_name }));
+      if (r.run_id && a[1] === 'recon') subject.push(h('a', { href: 'a_reconciliation.html?run=' + encodeURIComponent(r.run_id), text: 'Open run' }));
+      body.append(h('tr', {}, [
+        h('td', { class: 'nowrap', text: fmtTs(r.at) }),
+        h('td', {}, who),
+        h('td', {}, [h('span', { class: 'tag ' + cls, text: a[0] })]),
+        h('td', {}, subject.length ? subject : [document.createTextNode('—')]),
+        h('td', { text: describe(r) })
+      ]));
+    });
+    $('listEmpty').hidden = data.length > 0;
+    const total = count || 0;
+    $('listRange').textContent = total ? (state.offset + 1) + '–' + (state.offset + data.length) + ' of ' + total.toLocaleString() : '';
+    $('listPrev').disabled = state.offset === 0;
+    $('listNext').disabled = state.offset + data.length >= total;
+  }
+
+  let timer;
+  function reload(){ state.offset = 0; load(); }
+  ['fCat', 'fBranch'].forEach(function(id){ $(id).addEventListener('change', reload); });
+  ['fFrom', 'fTo'].forEach(function(id){ $(id).addEventListener('change', reload); });
+  $('fSearch').addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(reload, 300); });
+  $('listPrev').addEventListener('click', function(){ state.offset = Math.max(0, state.offset - PAGE); load(); });
+  $('listNext').addEventListener('click', function(){ state.offset += PAGE; load(); });
+
+  load();
+})();
+</script>
+</body>
+</html>

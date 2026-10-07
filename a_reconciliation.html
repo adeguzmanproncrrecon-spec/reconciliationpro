@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reconciliation — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin"></script>
+<script src="js/annex-view.js"></script>
+<!-- SheetJS 0.20.3 (self-hosted, may SRI) para sa Excel export -->
+<script src="js/vendor/xlsx-0.20.3.full.min.js"
+        integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"></script>
+<script src="js/export-xlsx.js"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+    --st-process:#3E5C76; --st-process-bg:#EAF0F5;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  h3{ font-size:14.5px; margin:0 0 10px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .bad{ color:var(--rust); font-weight:600; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .head-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .btn{
+    font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+    padding:8px 14px; border-radius:8px; border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink);
+  }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; }
+  .btn-primary:hover{ background:var(--teal-light); }
+  .btn-sm{ font-size:12.5px; padding:5px 10px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); white-space:nowrap; vertical-align:middle; }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tr.pick{ cursor:pointer; }
+  tr.pick:hover td{ background:#F7F8F5; }
+  tr.selected td{ background:#E6EFEC; }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  .status{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .s-done, .s-matched, .s-PAID{ background:#E2EEEC; color:var(--teal); }
+  .s-queued, .s-running, .s-draft, .s-APPROVED{ background:#F7EEDD; color:var(--amber); }
+  .s-failed, .s-DENIED, .s-UNMATCHED, .s-UNMAPPED{ background:#FBEAE6; color:var(--rust); }
+  .s-RTH{ background:#F7EEDD; color:#8A6224; }
+  .s-IN{ background:var(--st-process-bg); color:var(--st-process); }
+  .s-DUPLICATE, .s-NOT{ background:var(--paper); color:var(--slate); }
+  .facts{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; margin:6px 0 16px; }
+  .facts div{ background:var(--paper); border-radius:8px; padding:10px 12px; font-size:12.5px; color:var(--slate); }
+  .facts b{ display:block; color:var(--ink); font-size:14px; margin-top:2px; }
+  .job{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 14px; background:var(--paper); border-radius:8px; margin-bottom:16px; font-size:13px; }
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:14px; overflow-x:auto; }
+  .tab{ font-family:inherit; font-size:13.5px; font-weight:600; color:var(--slate); background:none; border:none;
+        border-bottom:2.5px solid transparent; padding:9px 12px 10px; cursor:pointer; white-space:nowrap; }
+  .tab.active{ color:var(--teal); border-bottom-color:var(--teal); }
+  .grid2{ display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:16px; }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <!-- RUNS -->
+  <div class="card">
+    <h2>Recon runs</h2>
+    <p class="sub">Choose a run to see its matching status and results.</p>
+    <div class="row">
+      <div class="field"><label for="branchFilter">Branch</label><select id="branchFilter"></select></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Facility</th><th>Branch</th><th>Report date</th><th>Matching date</th><th>Run status</th></tr></thead>
+        <tbody id="runsBody"></tbody>
+      </table>
+      <div class="empty" id="runsEmpty" hidden>No runs yet.</div>
+    </div>
+    <div class="pager">
+      <span id="runsRange"></span>
+      <button class="btn btn-sm" type="button" id="runsPrev" disabled>Previous</button>
+      <button class="btn btn-sm" type="button" id="runsNext" disabled>Next</button>
+    </div>
+  </div>
+
+  <!-- RUN DETAIL -->
+  <div class="card" id="runCard" hidden>
+    <div class="head-row">
+      <div><h2 id="runTitle"></h2><p class="sub" id="runSub" style="margin:0"></p></div>
+      <span class="status" id="runStatus"></span>
+    </div>
+    <div class="facts">
+      <div>Report date<b id="fReport"></b></div>
+      <div>Previous report date<b id="fPrev"></b></div>
+      <div>Matching date<b id="fMatch"></b></div>
+      <div>LOI coverage<b id="fCov"></b></div>
+    </div>
+
+    <div class="job" id="jobBox">
+      <span id="jobText"></span>
+      <span class="status" id="jobStatus" hidden></span>
+      <span class="muted" id="jobTimes"></span>
+      <span style="flex:1"></span>
+      <button class="btn btn-primary btn-sm" type="button" id="runBtn" hidden>Run matching</button>
+      <button class="btn btn-sm" type="button" id="reopenBtn" hidden>Reopen run</button>
+    </div>
+
+    <div id="results" hidden>
+      <div class="tabs" role="tablist">
+        <button class="tab active" type="button" data-tab="summary">Summary</button>
+        <button class="tab" type="button" data-tab="annex">Annex A</button>
+        <button class="tab" type="button" data-tab="report">Matching Report</button>
+        <button class="tab" type="button" data-tab="ho">HO ICS Recon</button>
+        <button class="tab" type="button" data-tab="unmapped" id="unmappedTab">Unmapped processes</button>
+      </div>
+
+      <!-- SUMMARY -->
+      <div data-panel="summary">
+        <div class="grid2">
+          <div>
+            <h3>Status of HF ICS claims (amount used for recon)</h3>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Status</th><th class="num">As of report date</th><th class="num">Amount</th>
+                <th class="num">As of prev. report date</th><th class="num">Amount</th>
+                <th class="num">As of matching date</th><th class="num">Amount</th></tr></thead>
+              <tbody id="sumStatus"></tbody>
+            </table></div>
+          </div>
+          <div>
+            <h3>HF ICS reconciling items (as of report date)</h3>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Reconciling item</th><th class="num">Claims</th><th class="num">ICS amount</th><th class="num">Recon amount</th></tr></thead>
+              <tbody id="sumHf"></tbody>
+            </table></div>
+            <h3 style="margin-top:16px">HO ICS reconciling items</h3>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Reconciling item</th><th class="num">Claims</th><th class="num">Estimated amount</th></tr></thead>
+              <tbody id="sumHo"></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANNEX A -->
+      <div data-panel="annex" hidden>
+        <div class="row">
+          <div class="field"><label for="annexVer">Version</label>
+            <select id="annexVer"><option value="internal">Internal (PhilHealth only)</option><option value="facility">Facility version</option></select></div>
+          <button class="btn btn-sm" type="button" id="annexExport">Export Annex A (Excel)</button>
+        </div>
+        <div id="annexBody"></div>
+      </div>
+
+      <!-- MATCHING REPORT -->
+      <div data-panel="report" hidden>
+        <div class="row">
+          <div class="field"><label for="repStatus">Status (report date)</label><select id="repStatus"></select></div>
+          <div class="field"><label for="repSearch">Claim series</label><input type="search" id="repSearch" placeholder="13 digits" inputmode="numeric"></div>
+          <button class="btn btn-sm" type="button" id="repExport">Export Matching Report (Excel)</button>
+          <span class="muted" id="repExportText"></span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th class="num">Item</th><th>Claim series</th><th>Patient</th><th class="num">ICS amount</th>
+            <th>Status (report)</th><th>Last trail (report)</th><th>Status (prev.)</th><th>Status (matching)</th>
+            <th>Mode</th><th class="num">Amount paid</th><th class="num">Amount on PHIC books</th>
+            <th class="num">Used for recon (report)</th><th class="num">Recon amount</th><th class="num">Upgrade (downgrade)</th>
+            <th class="num">Filed vs actual payment upgrade</th><th>Patient ref. no.</th>
+            <th>Reconciling item</th><th>Annex A line (HF)</th><th>Annex A line (PhilHealth)</th><th>Ctrl no.</th>
+            <th>Case rate (1st / 2nd)</th><th>Health care professional</th><th>History effect</th>
+            <th>MR status (received)</th><th>PARD status (received)</th><th>Issue tag / untag (internal)</th><th>Issue (internal)</th><th>Type of claim (internal)</th>
+            <th class="num">Payment TAT, days (internal)</th><th></th>
+          </tr></thead>
+          <tbody id="repBody"></tbody>
+        </table><div class="empty" id="repEmpty" hidden>No rows.</div></div>
+        <div class="pager"><span id="repRange"></span>
+          <button class="btn btn-sm" type="button" id="repPrev" disabled>Previous</button>
+          <button class="btn btn-sm" type="button" id="repNext" disabled>Next</button></div>
+
+        <!-- CLAIM HISTORY (PhilHealth lang; claim_history RPC) -->
+        <div class="card" id="histBox" hidden style="margin-top:18px">
+          <div class="head-row">
+            <div><h3 id="histTitle"></h3>
+              <div class="muted">Every row for this claim series in this run's uploads (status trail, payments, RTH/Denial, MR, PARD, tagging), newest first.</div></div>
+            <button class="btn btn-sm" type="button" id="histClose">Close</button>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Date</th><th>Source</th><th>Event</th><th>Details</th><th>File</th></tr></thead>
+            <tbody id="histBody"></tbody>
+          </table><div class="empty" id="histEmpty" hidden>No history found for this claim series.</div></div>
+          <div class="pager"><span id="histRange"></span>
+            <button class="btn btn-sm" type="button" id="histPrev" disabled>Previous</button>
+            <button class="btn btn-sm" type="button" id="histNext" disabled>Next</button></div>
+        </div>
+      </div>
+
+      <!-- HO -->
+      <div data-panel="ho" hidden>
+        <div class="table-wrap"><table>
+          <thead><tr><th class="num">Item</th><th>Claim series</th><th class="num">Estimated amount</th><th>RECREF</th>
+            <th>In HF ICS?</th><th>Universe</th><th>Within recon period?</th><th>Status (report)</th><th>Reconciling item</th>
+            <th>Annex A line (PhilHealth)</th><th>Annex A line (HF)</th></tr></thead>
+          <tbody id="hoBody"></tbody>
+        </table><div class="empty" id="hoEmpty" hidden>No rows.</div></div>
+        <div class="pager"><span id="hoRange"></span>
+          <button class="btn btn-sm" type="button" id="hoPrev" disabled>Previous</button>
+          <button class="btn btn-sm" type="button" id="hoNext" disabled>Next</button></div>
+      </div>
+
+      <!-- UNMAPPED -->
+      <div data-panel="unmapped" hidden>
+        <p class="sub">These PROCESS values from the Status Trail have no interpretation yet, so their claims show as UNMAPPED.
+          FINMAREP can map them below, then reopen the run and run matching again.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Process</th><th class="num">Trail rows</th><th>Map to</th><th></th></tr></thead>
+          <tbody id="unmBody"></tbody>
+        </table><div class="empty" id="unmEmpty" hidden>All processes are mapped.</div></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const PAGE = 50, RUNS_PAGE = 10,
+        STATUSES = ['PAID', 'APPROVED FOR PAYMENT', 'DENIED', 'RTH', 'IN PROCESS', 'UNMATCHED', 'UNMAPPED', 'DUPLICATE', 'NOT YET FILED'];
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { runsOffset: 0, run: null, match: null, repOffset: 0, hoOffset: 0, poll: null, branches: [], myBranches: [] };
+  const me = await window.sbUserReady;
+  const isFinmarep = me.role === 'finmarep';
+
+  // ---------- helpers ----------
+  function showMsg(t, k){ const m = $('msg'); m.textContent = t; m.className = 'msg show ' + k; }
+  function clearMsg(){ $('msg').className = 'msg'; }
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function td(t, cls){ return h('td', { class: cls || '', text: t === null || t === undefined ? '—' : String(t) }); }
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  function money(n){ return n === null || n === undefined ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function badge(s){ return h('span', { class: 'status s-' + String(s || '').split(' ')[0], text: s || '—' }); }
+  function pager(prefix, offset, shown, total){
+    $(prefix + 'Range').textContent = total ? (offset + 1) + '–' + (offset + shown) + ' of ' + total.toLocaleString() : '';
+    $(prefix + 'Prev').disabled = offset === 0;
+    $(prefix + 'Next').disabled = offset + shown >= total;
+  }
+
+  // ---------- branches + runs ----------
+  async function loadBranches(){
+    const [{ data: br }, { data: mine }] = await Promise.all([
+      sb.from('branches').select('id, code, name').order('name'),
+      sb.from('user_branches').select('branch_id').eq('user_id', me.id)
+    ]);
+    state.branches = br || [];
+    state.myBranches = (mine || []).map(function(r){ return r.branch_id; });
+    const sel = $('branchFilter');
+    if (isFinmarep && state.myBranches.length) sel.add(new Option('My branches', 'mine'));
+    sel.add(new Option('All branches', 'all'));
+    state.branches.forEach(function(b){ sel.add(new Option(b.name + ' (' + b.code + ')', b.id)); });
+  }
+
+  async function loadRuns(){
+    let q = sb.from('recon_runs')
+      .select('id, report_date, matching_date, status, facilities!inner(name, accreditation_no, branch_id, branches(code))', { count: 'exact' })
+      .order('created_at', { ascending: false }).range(state.runsOffset, state.runsOffset + RUNS_PAGE - 1);
+    const f = $('branchFilter').value;
+    if (f === 'mine') q = q.in('facilities.branch_id', state.myBranches);
+    else if (f && f !== 'all') q = q.eq('facilities.branch_id', f);
+    const { data, error, count } = await q;
+    const body = $('runsBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load runs: ' + error.message, 'err'); return; }
+    data.forEach(function(r){
+      body.append(h('tr', { class: 'pick' + (state.run && state.run.id === r.id ? ' selected' : ''), onclick: function(){ openRun(r.id); } }, [
+        h('td', {}, [h('div', { text: r.facilities.name }), h('div', { class: 'muted', text: r.facilities.accreditation_no })]),
+        td(r.facilities.branches ? r.facilities.branches.code : '—'), td(fmtDate(r.report_date)), td(fmtDate(r.matching_date)),
+        h('td', {}, [badge(r.status)])
+      ]));
+    });
+    $('runsEmpty').hidden = data.length > 0;
+    pager('runs', state.runsOffset, data.length, count || 0);
+  }
+
+  // ---------- run + job ----------
+  async function openRun(id){
+    clearMsg();
+    const { data: r, error } = await sb.from('recon_runs')
+      .select('*, facilities(name, accreditation_no, branches(name))').eq('id', id).single();
+    if (error) { showMsg('Could not open run: ' + error.message, 'err'); return; }
+    state.run = r; state.repOffset = 0; state.hoOffset = 0;
+    $('histBox').hidden = true;
+    $('runTitle').textContent = r.facilities.name;
+    $('runSub').textContent = r.facilities.accreditation_no + (r.facilities.branches ? ' · ' + r.facilities.branches.name : '');
+    $('runStatus').textContent = r.status; $('runStatus').className = 'status s-' + r.status;
+    $('fReport').textContent = fmtDate(r.report_date);
+    $('fPrev').textContent = fmtDate(r.prev_report_date);
+    $('fMatch').textContent = fmtDate(r.matching_date);
+    $('fCov').textContent = (r.coverage_start || r.coverage_end) ? fmtDate(r.coverage_start) + ' – ' + fmtDate(r.coverage_end) : '—';
+    $('runCard').hidden = false;
+    await loadJob();
+    loadRuns();
+  }
+
+  async function loadJob(){
+    clearTimeout(state.poll);
+    const r = state.run;
+    const [{ data: last }, { data: cur }] = await Promise.all([
+      sb.from('recon_matches').select('*').eq('run_id', r.id).order('requested_at', { ascending: false }).limit(1).maybeSingle(),
+      sb.from('recon_matches').select('*').eq('run_id', r.id).eq('is_current', true).maybeSingle()
+    ]);
+    const js = $('jobStatus');
+    if (!last) {
+      $('jobText').textContent = 'Not matched yet.';
+      js.hidden = true; $('jobTimes').textContent = '';
+    } else {
+      $('jobText').textContent = 'Latest matching:';
+      js.hidden = false; js.textContent = last.status; js.className = 'status s-' + last.status;
+      let t = 'requested ' + fmtTs(last.requested_at);
+      if (last.started_at) t += ' · started ' + fmtTs(last.started_at);
+      if (last.finished_at) t += ' · finished ' + fmtTs(last.finished_at);
+      if (last.status === 'queued') t += ' · starts within about a minute; this page refreshes automatically';
+      if (last.error) t += ' · error: ' + last.error;
+      $('jobTimes').textContent = t;
+      if (last.status === 'queued' || last.status === 'running') state.poll = setTimeout(async function(){
+        const { data: rr } = await sb.from('recon_runs').select('status').eq('id', r.id).single();
+        if (rr) { state.run.status = rr.status; $('runStatus').textContent = rr.status; $('runStatus').className = 'status s-' + rr.status; }
+        loadJob();
+      }, 10000);
+    }
+    const active = last && (last.status === 'queued' || last.status === 'running');
+    $('runBtn').hidden = !(isFinmarep && r.status === 'draft' && !active);
+    $('reopenBtn').hidden = !(isFinmarep && r.status === 'matched');
+    state.match = cur || null;
+    $('results').hidden = !state.match;
+    // Habang may bagong job, linawin na ang nakikita ay ang nakaraang resulta
+    if (active && state.match) {
+      showMsg('A new matching is ' + last.status + '. The results below are from the previous matching (finished ' +
+              fmtTs(state.match.finished_at) + ') and will be replaced when it is done.', 'ok');
+    } else if (state.match && last && last.id === state.match.id) {
+      clearMsg();
+    }
+    if (state.match) { loadSummary(); loadAnnex(); loadReport(); loadHo(); loadUnmapped(); }
+  }
+
+  $('runBtn').addEventListener('click', async function(){
+    if (!confirm('Run matching for this run? It uses the files uploaded at the time the job starts.')) return;
+    this.disabled = true;
+    const { error } = await sb.rpc('request_matching', { p_run: state.run.id });
+    this.disabled = false;
+    if (error) { showMsg(error.message, 'err'); return; }
+    showMsg('Matching queued. It starts within about a minute; this page updates automatically.', 'ok');
+    loadJob();
+  });
+  $('reopenBtn').addEventListener('click', async function(){
+    if (!confirm('Reopen this run? You can change uploads and run matching again. Current results stay until the new matching finishes.')) return;
+    const { error } = await sb.rpc('reopen_recon_run', { p_run: state.run.id });
+    if (error) { showMsg(error.message, 'err'); return; }
+    state.run.status = 'draft'; $('runStatus').textContent = 'draft'; $('runStatus').className = 'status s-draft';
+    showMsg('Run reopened. Upload changes in Data Ingestion, then run matching again.', 'ok');
+    loadJob(); loadRuns();
+  });
+
+  // ---------- summary ----------
+  async function loadSummary(){
+    const { data, error } = await sb.rpc('match_summary', { p_match: state.match.id });
+    if (error) { showMsg('Could not load summary: ' + error.message, 'err'); return; }
+    const by = function(kind){ return data.filter(function(x){ return x.kind === kind; }); };
+    const get = function(kind, label){ return data.find(function(x){ return x.kind === kind && x.label === label; }); };
+    const sb1 = $('sumStatus'); sb1.replaceChildren();
+    const labels = STATUSES.filter(function(s){ return ['status_rd', 'status_pd', 'status_md'].some(function(k){ return get(k, s); }); });
+    const tot = { rd: [0, 0], pd: [0, 0], md: [0, 0] };
+    labels.forEach(function(s){
+      const cells = [h('td', {}, [badge(s)])];
+      ['rd', 'pd', 'md'].forEach(function(k){
+        const x = get('status_' + k, s);
+        cells.push(td(x ? Number(x.claims).toLocaleString() : (k === 'pd' && !state.match.prev_report_date ? '—' : '0'), 'num'));
+        cells.push(td(x ? money(x.amount) : '—', 'num'));
+        // NOT YET FILED: hindi kasama sa total ng cutoff (RECON_SPEC §3c)
+        if (x && s !== 'NOT YET FILED') { tot[k][0] += Number(x.claims); tot[k][1] += Number(x.amount || 0); }
+      });
+      sb1.append(h('tr', {}, cells));
+    });
+    sb1.append(h('tr', {}, [h('td', {}, [h('b', { text: 'TOTAL' }), h('div', { class: 'muted', text: 'excludes NOT YET FILED' })])].concat(['rd', 'pd', 'md'].flatMap(function(k){
+      return [td(tot[k][0].toLocaleString(), 'num'), td(money(tot[k][1]), 'num')]; }))));
+
+    const hf = $('sumHf'); hf.replaceChildren();
+    by('hf_item').forEach(function(x){ hf.append(h('tr', {}, [td(x.label), td(Number(x.claims).toLocaleString(), 'num'), td(money(x.amount2), 'num'), td(money(x.amount), 'num')])); });
+    const ho = $('sumHo'); ho.replaceChildren();
+    by('ho_item').forEach(function(x){ ho.append(h('tr', {}, [td(x.label), td(Number(x.claims).toLocaleString(), 'num'), td(money(x.amount), 'num')])); });
+    if (!by('ho_item').length) ho.append(h('tr', {}, [h('td', { colspan: '3', class: 'muted', text: 'No HO ICS rows.' })]));
+  }
+
+  // ---------- Annex A (js/annex-view.js) ----------
+  function loadAnnex(){
+    return AnnexView.load($('annexBody'), state.match.id, $('annexVer').value === 'internal');
+  }
+  $('annexVer').addEventListener('change', loadAnnex);
+
+  // ---------- Excel export ----------
+  $('annexExport').addEventListener('click', async function(){
+    this.disabled = true;
+    try { await ReconExport.exportAnnex(state.match.id, $('annexVer').value === 'internal'); }
+    catch (err) { showMsg('Export failed: ' + (err.message || err), 'err'); }
+    finally { this.disabled = false; }
+  });
+  $('repExport').addEventListener('click', async function(){
+    const btn = this, txt = $('repExportText');
+    btn.disabled = true; txt.textContent = 'Preparing…';
+    try {
+      const m = Object.assign({}, state.match, { hospital_name: state.run.facilities.name, accreditation_no: state.run.facilities.accreditation_no });
+      const n = await ReconExport.exportMatchingReport(m, function(rows, total){
+        txt.textContent = 'Building Excel file… ' + rows.toLocaleString() + (total ? ' of ' + total.toLocaleString() : '') + ' rows';
+      });
+      txt.textContent = 'Downloaded (' + (n / 1048576).toFixed(1) + ' MB).';
+    } catch (err) { txt.textContent = ''; showMsg('Export failed: ' + (err.message || err), 'err'); }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- matching report (paginated) ----------
+  (function(){ const s = $('repStatus'); s.add(new Option('All', '')); STATUSES.forEach(function(x){ s.add(new Option(x, x)); }); })();
+  async function loadReport(){
+    let q = sb.from('recon_hf_results')
+      .select('item_no, claim_series, claim_series_raw, pat_lname, pat_fname, ics_amount, status_rd, trail_date_rd, trail_process_rd, status_pd, status_md, mode_of_payment, total_amount_paid, amount_on_phic_books, amount_used_rd, recon_amount, upgrade_downgrade, reconciling_item, ctrl_no, first_case_rate, second_case_rate, health_professional, history_effect, mr_status, mr_rcv_date, pard_status, pard_rcv_date, filed_vs_actual, patient_ref, annex_hf_line, annex_ph_line', { count: 'exact' })
+      .eq('match_id', state.match.id).order('item_no').range(state.repOffset, state.repOffset + PAGE - 1);
+    if ($('repStatus').value) q = q.eq('status_rd', $('repStatus').value);
+    const s = $('repSearch').value.replace(/\D/g, '');
+    if (s) q = q.like('claim_series', s + '%');
+    const { data, error, count } = await q;
+    const body = $('repBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load report: ' + error.message, 'err'); return; }
+    // Internal Data Only (tagging/untagging) — hiwalay na table, para sa mga item sa pahinang ito lang
+    const internal = {};
+    if (data.length) {
+      const { data: ins } = await sb.from('recon_hf_internal')
+        .select('item_no, tag_date, tag_status, untag_date, untag_status, issue, days_on_issue, payment_tat, type_of_claim')
+        .eq('match_id', state.match.id).in('item_no', data.map(function(x){ return x.item_no; }));
+      (ins || []).forEach(function(r){ internal[r.item_no] = r; });
+    }
+    function withDate(v, d){ return v || d ? (v || '—') + (d ? ' (' + fmtDate(d) + ')' : '') : '—'; }
+    data.forEach(function(x){
+      const ins = internal[x.item_no];
+      body.append(h('tr', {}, [
+        td(x.item_no, 'num'),
+        h('td', {}, [h('div', { text: x.claim_series || 'INVALID' }), x.claim_series ? null : h('div', { class: 'muted', text: x.claim_series_raw || '(blank)' })]),
+        td([x.pat_lname, x.pat_fname].filter(Boolean).join(', ') || '—'),
+        td(money(x.ics_amount), 'num'),
+        h('td', {}, [badge(x.status_rd)]),
+        td(x.trail_process_rd ? x.trail_process_rd + ' (' + fmtDate(x.trail_date_rd) + ')' : '—'),
+        h('td', {}, [x.status_pd ? badge(x.status_pd) : document.createTextNode('—')]),
+        h('td', {}, [badge(x.status_md)]),
+        td(x.mode_of_payment), td(money(x.total_amount_paid), 'num'), td(money(x.amount_on_phic_books), 'num'),
+        td(money(x.amount_used_rd), 'num'), td(money(x.recon_amount), 'num'), td(money(x.upgrade_downgrade), 'num'),
+        td(money(x.filed_vs_actual), 'num'), td(x.patient_ref),
+        td(x.reconciling_item), td(x.annex_hf_line), td(x.annex_ph_line), td(x.ctrl_no),
+        td([x.first_case_rate, x.second_case_rate].filter(Boolean).join(' | ') || '—'),
+        td(x.health_professional), td(x.history_effect),
+        td(withDate(x.mr_status, x.mr_rcv_date)), td(withDate(x.pard_status, x.pard_rcv_date)),
+        td(ins && (ins.tag_date || ins.untag_date) ? 'Tag: ' + withDate(ins.tag_status, ins.tag_date) + ' · Untag: ' + withDate(ins.untag_status, ins.untag_date) : '—'),
+        td(ins ? ins.issue : null),
+        td(ins ? ins.type_of_claim : null),
+        td(ins && ins.payment_tat !== null ? ins.payment_tat + (ins.days_on_issue ? ' (less ' + ins.days_on_issue + ' days on issue)' : '') : '—', 'num'),
+        h('td', {}, [x.claim_series
+          ? h('button', { class: 'btn btn-sm', type: 'button', text: 'History', onclick: function(){ openHistory(x.claim_series); } })
+          : null])
+      ]));
+    });
+    $('repEmpty').hidden = data.length > 0;
+    pager('rep', state.repOffset, data.length, count || 0);
+  }
+
+  // ---------- Claim History (PhilHealth lang; claim_history RPC) ----------
+  const HIST_PAGE = 50;
+  const hist = { series: null, offset: 0 };
+  function detailText(obj){
+    return Object.entries(obj || {}).filter(function([, v]){ return v !== null && v !== ''; }).map(function([k, v]){
+      const s = String(v);
+      return k + ': ' + (/^\d{4}-\d{2}-\d{2}$/.test(s) ? fmtDate(s) : s);
+    }).join(' · ') || '—';
+  }
+  async function loadHistory(){
+    const { data, error } = await sb.rpc('claim_history', { p_run: state.run.id, p_series: hist.series, p_limit: HIST_PAGE + 1, p_offset: hist.offset });
+    const body = $('histBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load claim history: ' + error.message, 'err'); return; }
+    const rows = data.slice(0, HIST_PAGE);
+    rows.forEach(function(x){
+      body.append(h('tr', {}, [td(fmtDate(x.event_date)), td(x.source), td(x.title),
+        h('td', { style: 'white-space:normal; min-width:320px', text: detailText(x.details) }), td(x.file_name)]));
+    });
+    $('histEmpty').hidden = rows.length > 0;
+    $('histRange').textContent = rows.length ? (hist.offset + 1) + '–' + (hist.offset + rows.length) : '';
+    $('histPrev').disabled = hist.offset === 0;
+    $('histNext').disabled = data.length <= HIST_PAGE;
+  }
+  function openHistory(series){
+    hist.series = series; hist.offset = 0;
+    $('histTitle').textContent = 'Claim History · ' + series;
+    $('histBox').hidden = false;
+    loadHistory().then(function(){ $('histBox').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  }
+  $('histClose').addEventListener('click', function(){ $('histBox').hidden = true; });
+  $('histPrev').addEventListener('click', function(){ hist.offset = Math.max(0, hist.offset - HIST_PAGE); loadHistory(); });
+  $('histNext').addEventListener('click', function(){ hist.offset += HIST_PAGE; loadHistory(); });
+
+  // ---------- HO (PhilHealth lang; RLS) ----------
+  async function loadHo(){
+    const { data, error, count } = await sb.from('recon_ho_results')
+      .select('item_no, series, series_raw, estimated_amt, recref, in_hf_ics, universe_status, within_period, status_rd, reconciling_item, annex_ph_line, annex_hf_line', { count: 'exact' })
+      .eq('match_id', state.match.id).order('item_no').range(state.hoOffset, state.hoOffset + PAGE - 1);
+    const body = $('hoBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load HO ICS recon: ' + error.message, 'err'); return; }
+    data.forEach(function(x){
+      body.append(h('tr', {}, [td(x.item_no, 'num'), td(x.series || ('INVALID: ' + (x.series_raw || '(blank)'))), td(money(x.estimated_amt), 'num'),
+        td(fmtDate(x.recref)), td(x.in_hf_ics ? 'Yes' : 'No'), td(x.universe_status),
+        td(x.within_period === null ? '—' : (x.within_period ? 'Yes' : 'No')), h('td', {}, [badge(x.status_rd)]), td(x.reconciling_item), td(x.annex_ph_line), td(x.annex_hf_line)]));
+    });
+    $('hoEmpty').hidden = data.length > 0;
+    pager('ho', state.hoOffset, data.length, count || 0);
+  }
+
+  // ---------- unmapped ----------
+  async function loadUnmapped(){
+    const { data, error } = await sb.from('recon_match_unmapped').select('process, row_count').eq('match_id', state.match.id).order('row_count', { ascending: false }).limit(200);
+    const body = $('unmBody'); body.replaceChildren();
+    if (error) return;
+    $('unmappedTab').textContent = 'Unmapped processes' + (data.length ? ' (' + data.length + ')' : '');
+    data.forEach(function(x){
+      const sel = h('select', { 'aria-label': 'Interpretation for ' + x.process });
+      ['IN PROCESS', 'FOR PAYMENT', 'RTH/DENIED', 'DENIED'].forEach(function(o){ sel.add(new Option(o, o)); });
+      const save = h('button', { class: 'btn btn-sm', type: 'button', text: 'Save mapping', onclick: async function(){
+        const { error } = await sb.rpc('upsert_process_mapping', { p_process: x.process, p_is_pattern: false, p_interpretation: sel.value });
+        if (error) { showMsg(error.message, 'err'); return; }
+        save.disabled = true; save.textContent = 'Saved';
+        showMsg('Mapping saved for "' + x.process + '". Reopen the run and run matching again to apply it.', 'ok');
+      } });
+      body.append(h('tr', {}, [td(x.process), td(Number(x.row_count).toLocaleString(), 'num'),
+        h('td', {}, isFinmarep ? [sel] : [document.createTextNode('—')]), h('td', {}, isFinmarep ? [save] : [])]));
+    });
+    $('unmEmpty').hidden = data.length > 0;
+  }
+
+  // ---------- events ----------
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x === t); });
+      document.querySelectorAll('[data-panel]').forEach(function(p){ p.hidden = p.dataset.panel !== t.dataset.tab; });
+    });
+  });
+  let searchTimer;
+  $('repSearch').addEventListener('input', function(){ clearTimeout(searchTimer); searchTimer = setTimeout(function(){ state.repOffset = 0; loadReport(); }, 300); });
+  $('repStatus').addEventListener('change', function(){ state.repOffset = 0; loadReport(); });
+  $('repPrev').addEventListener('click', function(){ state.repOffset = Math.max(0, state.repOffset - PAGE); loadReport(); });
+  $('repNext').addEventListener('click', function(){ state.repOffset += PAGE; loadReport(); });
+  $('hoPrev').addEventListener('click', function(){ state.hoOffset = Math.max(0, state.hoOffset - PAGE); loadHo(); });
+  $('hoNext').addEventListener('click', function(){ state.hoOffset += PAGE; loadHo(); });
+  $('branchFilter').addEventListener('change', function(){ state.runsOffset = 0; loadRuns(); });
+  $('runsPrev').addEventListener('click', function(){ state.runsOffset = Math.max(0, state.runsOffset - RUNS_PAGE); loadRuns(); });
+  $('runsNext').addEventListener('click', function(){ state.runsOffset += RUNS_PAGE; loadRuns(); });
+
+  await loadBranches();
+  await loadRuns();
+  // Link mula sa Dashboard: a_reconciliation.html?run=<id>
+  const deepRun = new URLSearchParams(location.search).get('run');
+  if (deepRun && /^[0-9a-f-]{36}$/i.test(deepRun)) openRun(deepRun);
+})();
+</script>
+</body>
+</html>

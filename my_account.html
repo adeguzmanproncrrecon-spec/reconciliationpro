@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Account — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin,facility,facility_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --slate:#5B6670; --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:22px; margin:0 0 4px; }
+  h3{ font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--slate); margin:0 0 12px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 20px; line-height:1.5; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:20px; max-width:640px; }
+  dl{ margin:0; display:grid; grid-template-columns:max-content 1fr; gap:10px 18px; font-size:13.5px; }
+  dt{ color:var(--slate); }
+  dd{ margin:0; font-weight:500; overflow-wrap:anywhere; }
+  .note{ font-size:12.5px; color:var(--slate); margin:14px 0 0; line-height:1.5; }
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px; max-width:340px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field input{ font-family:inherit; font-size:13.5px; padding:9px 10px; border:1.5px solid var(--line); border-radius:8px; color:var(--ink); }
+  .field input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+  .rules{ list-style:none; padding:0; margin:0 0 14px; font-size:12.5px; color:var(--slate); }
+  .rules li::before{ content:'○ '; }
+  .rules li.ok{ color:var(--teal); }
+  .rules li.ok::before{ content:'● '; }
+  .btn{ font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; padding:9px 16px; border-radius:8px;
+        border:1.5px solid var(--teal); background:var(--teal); color:#FFFFFF; }
+  .btn:hover{ background:var(--teal-light); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; max-width:640px; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  @media (max-width: 640px){ body{ padding:16px; } dl{ grid-template-columns:1fr; gap:2px; } dd{ margin-bottom:8px; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <h2 id="name">My Account</h2>
+  <p class="sub" id="roleLine"></p>
+
+  <div class="card">
+    <h3>Account details</h3>
+    <dl>
+      <dt>Name</dt><dd id="dName">—</dd>
+      <dt>Email</dt><dd id="dEmail">—</dd>
+      <dt>Position</dt><dd id="dRole">—</dd>
+      <dt id="orgLabel">Organization</dt><dd id="dOrg">—</dd>
+      <dt id="brLabel" hidden>Branches you handle</dt><dd id="dBranches" hidden>—</dd>
+      <dt>Status</dt><dd id="dStatus">—</dd>
+      <dt>Registered</dt><dd id="dSince">—</dd>
+      <dt>Last sign-in</dt><dd id="dLast">—</dd>
+    </dl>
+    <p class="note" id="changeNote"></p>
+  </div>
+
+  <div class="card">
+    <h3>Change password</h3>
+    <div class="field"><label for="pCur">Current password</label><input type="password" id="pCur" autocomplete="current-password"></div>
+    <div class="field"><label for="pNew">New password</label><input type="password" id="pNew" autocomplete="new-password"></div>
+    <ul class="rules" id="rules">
+      <li data-rule="len">At least 8 characters</li>
+      <li data-rule="upper">At least one capital letter</li>
+      <li data-rule="digit">At least one number</li>
+    </ul>
+    <div class="field"><label for="pNew2">Confirm new password</label><input type="password" id="pNew2" autocomplete="new-password"></div>
+    <button class="btn" type="button" id="pwBtn">Change password</button>
+  </div>
+
+<script>
+(async function(){
+  const $ = function(id){ return document.getElementById(id); };
+  const me = await window.sbUserReady;
+  const isFacility = me.role === 'facility' || me.role === 'facility_admin';
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  function showMsg(t, k){ const m = $('msg'); m.textContent = t; m.className = 'msg show ' + k; m.scrollIntoView({ block: 'nearest' }); }
+
+  // ---------- account details (textContent lang) ----------
+  const { data: { user } } = await sb.auth.getUser();
+  const { data: prof } = await sb.from('profiles').select('status, created_at').eq('id', me.id).maybeSingle();
+  $('name').textContent = me.name;
+  $('roleLine').textContent = me.roleLabel + (me.org ? ' · ' + me.org : '');
+  $('dName').textContent = me.name;
+  $('dEmail').textContent = me.email || '—';
+  $('dRole').textContent = me.roleLabel || '—';
+  $('orgLabel').textContent = isFacility ? 'Facility' : 'Home branch';
+  $('dOrg').textContent = me.org || '—';
+  $('dStatus').textContent = prof ? prof.status.charAt(0).toUpperCase() + prof.status.slice(1) : '—';
+  $('dSince').textContent = fmtTs(prof && prof.created_at);
+  $('dLast').textContent = fmtTs(user && user.last_sign_in_at);
+  $('changeNote').textContent = isFacility
+    ? 'To change your name, position or facility, ask your Facility Admin' + (me.role === 'facility_admin' ? ' (or your PhilHealth Branch Admin)' : '') + '.'
+    : 'To change your name, position or branches, ask your Branch Admin' + (me.role === 'finmarep' ? ' or the FINMAREP approver' : '') + '.';
+
+  if (!isFacility) {
+    const { data: ub } = await sb.from('user_branches').select('branches(code, name)').eq('user_id', me.id);
+    const names = (ub || []).map(function(r){ return r.branches ? r.branches.name + ' (' + r.branches.code + ')' : null; }).filter(Boolean);
+    $('brLabel').hidden = false; $('dBranches').hidden = false;
+    $('dBranches').textContent = me.role === 'finmarep'
+      ? (names.length ? names.join(', ') + ' — you can see all branches' : 'All branches')
+      : (names.length ? names.join(', ') : 'None assigned yet');
+  }
+
+  // ---------- password ----------
+  const RULES = { len: function(v){ return v.length >= 8; }, upper: function(v){ return /[A-Z]/.test(v); }, digit: function(v){ return /[0-9]/.test(v); } };
+  $('pNew').addEventListener('input', function(){
+    const v = this.value;
+    document.querySelectorAll('#rules li').forEach(function(li){ li.classList.toggle('ok', RULES[li.dataset.rule](v)); });
+  });
+  $('pwBtn').addEventListener('click', async function(){
+    const cur = $('pCur').value, nw = $('pNew').value, nw2 = $('pNew2').value;
+    if (!cur) { showMsg('Enter your current password.', 'err'); return; }
+    if (!Object.values(RULES).every(function(f){ return f(nw); })) { showMsg('The new password does not meet the rules.', 'err'); return; }
+    if (nw !== nw2) { showMsg('The new passwords do not match.', 'err'); return; }
+    if (nw === cur) { showMsg('The new password must be different from the current one.', 'err'); return; }
+    const btn = this; btn.disabled = true;
+    try {
+      // Patunayan muna ang kasalukuyang password
+      const chk = await sb.auth.signInWithPassword({ email: me.email, password: cur });
+      if (chk.error) { showMsg('The current password is incorrect.', 'err'); return; }
+      const { error } = await sb.auth.updateUser({ password: nw });
+      if (error) { showMsg('Could not change the password: ' + error.message, 'err'); return; }
+      ['pCur', 'pNew', 'pNew2'].forEach(function(id){ $(id).value = ''; });
+      document.querySelectorAll('#rules li').forEach(function(li){ li.classList.remove('ok'); });
+      showMsg('Password changed. Use the new password the next time you sign in.', 'ok');
+    } finally { btn.disabled = false; }
+  });
+})();
+</script>
+</body>
+</html>

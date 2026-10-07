@@ -1,0 +1,6 @@
+# Huwag galawin ang line endings ng vendor files (sinusuri ang SHA-384 / SRI ng mga ito)
+js/vendor/** -text
+# Binary
+*.xlsx binary
+*.png binary
+*.jpg binary

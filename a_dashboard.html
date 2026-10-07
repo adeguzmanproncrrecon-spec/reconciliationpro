@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReconciliationPro Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#141B22;
+    --ink-soft:#1F2932;
+    --ink-line:#263239;
+    --paper:#F3F4F1;
+    --paper-raised:#FFFFFF;
+    --teal:#1C4A47;
+    --teal-light:#2E6B66;
+    --brass:#B8863B;
+    --brass-soft:#E8D3AA;
+    --rust:#A8432C;
+    --slate:#5B6670;
+    --muted:#8B9496;
+    --line:#DADDD7;
+    --sidebar-w:264px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    overflow:hidden;
+  }
+
+  .app-shell{
+    display:grid;
+    grid-template-columns:var(--sidebar-w) minmax(0,1fr);
+    height:100vh;
+  }
+
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{
+    background:
+      radial-gradient(700px 500px at -20% -10%, #1E302F 0%, transparent 60%),
+      var(--ink);
+    color:#EDEEEA;
+    display:flex;
+    flex-direction:column;
+    padding:26px 16px 18px;
+    overflow-y:auto;
+  }
+  .sb-brand{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    padding:0 8px 26px;
+    text-decoration:none;
+    color:inherit;
+  }
+  .sb-brand img{ height:36px; width:auto; display:block; flex-shrink:0; }
+  .sb-brand .word{
+    font-family:'Fraunces',serif;
+    font-size:18px;
+    font-weight:500;
+    letter-spacing:.2px;
+    line-height:1.15;
+  }
+  .sb-brand .word em{ font-style:normal; color:var(--brass-soft); }
+  .sb-brand small{
+    display:block;
+    font-family:'Inter',sans-serif;
+    font-size:11.5px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+
+  .nav-group{ margin-bottom:22px; }
+  .nav-label{
+    font-size:12px;
+    color:#6F7A7D;
+    padding:0 12px 8px;
+  }
+  .nav{ display:flex; flex-direction:column; gap:2px; }
+  .nav-item{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 12px;
+    border-radius:8px;
+    color:#B7BEC0;
+    font-size:14px;
+    font-weight:500;
+    text-decoration:none;
+    transition:background .15s ease, color .15s ease;
+  }
+  [hidden]{ display:none !important; }
+  .nav-item svg{ width:18px; height:18px; flex-shrink:0; stroke-width:1.8; }
+  .nav-item:hover{ background:var(--ink-soft); color:#FFFFFF; }
+  .nav-item:focus-visible{ outline:2px solid var(--brass-soft); outline-offset:1px; }
+  .nav-item.active{
+    background:rgba(232,211,170,.08);
+    color:#FFFFFF;
+  }
+  .nav-item.active svg{ color:var(--brass-soft); }
+  .nav-item.active::before{
+    content:'';
+    position:absolute;
+    left:-16px; top:8px; bottom:8px;
+    width:3px;
+    border-radius:0 3px 3px 0;
+    background:var(--brass);
+  }
+
+  .sb-foot{
+    margin-top:auto;
+    padding:14px 8px 0;
+    border-top:1px solid var(--ink-line);
+    display:flex;
+    align-items:center;
+    gap:11px;
+  }
+  .avatar{
+    width:36px; height:36px;
+    border-radius:50%;
+    background:var(--teal);
+    color:var(--brass-soft);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:500;
+    flex-shrink:0;
+  }
+  .sb-foot .who{ min-width:0; flex:1; }
+  .sb-foot strong{ display:block; font-size:13.5px; color:#F2F3EF; font-weight:600; }
+  .sb-foot small{ font-size:12px; color:var(--muted); }
+  .sb-foot a{
+    color:var(--muted);
+    display:flex;
+    padding:6px;
+    border-radius:6px;
+  }
+  .sb-foot a:hover{ color:#FFFFFF; background:var(--ink-soft); }
+  .sb-foot a svg{ width:18px; height:18px; }
+
+  /* ---------- WORKSPACE ---------- */
+  .workspace{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    height:100vh;
+  }
+  .topbar{
+    height:72px;
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:0 32px;
+    background:var(--paper-raised);
+    border-bottom:1px solid var(--line);
+  }
+  .page-head h1{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:22px;
+    margin:0;
+    line-height:1.2;
+  }
+  .page-head p{
+    margin:2px 0 0;
+    font-size:13px;
+    color:var(--slate);
+  }
+  .topbar-spacer{ flex:1; }
+  .today{
+    font-size:13px;
+    color:var(--slate);
+    padding:7px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    white-space:nowrap;
+  }
+
+  .profile-menu{ position:relative; }
+  .profile-btn{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:none;
+    border:1px solid transparent;
+    border-radius:10px;
+    padding:5px 8px 5px 5px;
+    cursor:pointer;
+    font-family:inherit;
+    color:inherit;
+  }
+  .profile-btn:hover{ border-color:var(--line); }
+  .profile-btn .avatar{ width:34px; height:34px; font-size:15px; }
+  .profile-btn .txt{ text-align:left; }
+  .profile-btn strong{ display:block; font-size:13.5px; font-weight:600; }
+  .profile-btn small{ font-size:12px; color:var(--slate); }
+  .profile-btn svg{ width:16px; height:16px; color:var(--slate); }
+
+  .dropdown{
+    position:absolute;
+    right:0; top:calc(100% + 8px);
+    min-width:190px;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 12px 28px rgba(20,27,34,.12);
+    padding:6px;
+    z-index:30;
+  }
+  .dropdown[hidden]{ display:none; }
+  .dropdown a{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px;
+    border-radius:7px;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    text-decoration:none;
+  }
+  .dropdown a svg{ width:16px; height:16px; color:var(--slate); }
+  .dropdown a:hover{ background:var(--paper); }
+  .dropdown a.danger{ color:var(--rust); }
+  .dropdown a.danger svg{ color:var(--rust); }
+
+  .main-content{
+    flex:1;
+    min-height:0;
+    padding:24px 32px 28px;
+  }
+  .frame-card{
+    height:100%;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .frame-card iframe{
+    display:block;
+    width:100%;
+    height:100%;
+    border:none;
+  }
+
+  /* ---------- SHARED: buttons, toast, modal ---------- */
+  .icon-button{
+    background:none;
+    border:1px solid var(--line);
+    border-radius:8px;
+    width:38px; height:38px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .icon-button:hover{ background:var(--paper); }
+  .icon-button svg{ width:18px; height:18px; }
+
+  .toast{
+    position:fixed;
+    right:24px; bottom:24px;
+    max-width:340px;
+    background:var(--ink);
+    color:#F2F3EF;
+    font-size:13.5px;
+    padding:12px 16px;
+    border-radius:8px;
+    box-shadow:0 10px 24px rgba(20,27,34,.2);
+    opacity:0;
+    transform:translateY(8px);
+    pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:60;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background:rgba(20,27,34,.45);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .modal-backdrop[hidden]{ display:none; }
+  .modal{
+    width:100%;
+    max-width:420px;
+    background:var(--paper-raised);
+    border-radius:12px;
+    padding:22px 24px 24px;
+    box-shadow:0 24px 48px rgba(20,27,34,.2);
+  }
+  .modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .modal-header h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:21px;
+    margin:0;
+  }
+  .modal label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:16px;
+  }
+  .modal input{
+    display:block;
+    width:100%;
+    margin-top:7px;
+    padding:11px 13px;
+    font-size:14.5px;
+    font-family:inherit;
+    border:1.5px solid var(--line);
+    border-radius:8px;
+    outline:none;
+  }
+  .modal input:focus{ border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+  .modal-actions{
+    display:flex; justify-content:flex-end; gap:10px;
+    margin-top:6px;
+  }
+  .modal-actions button{
+    padding:10px 16px;
+    font-family:inherit;
+    font-size:14px;
+    font-weight:600;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .modal-actions button.primary{
+    background:var(--teal);
+    border-color:var(--teal);
+    color:#FFFFFF;
+  }
+  .modal-actions button.primary:hover{ background:var(--teal-light); }
+
+  .menu-btn.icon-button{ display:none; }
+  .scrim{ display:none; }
+
+  /* ---------- MOBILE ---------- */
+  @media (max-width: 960px){
+    .app-shell{ grid-template-columns:1fr; }
+    .sidebar{
+      position:fixed;
+      left:0; top:0; bottom:0;
+      width:var(--sidebar-w);
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform .22s ease;
+    }
+    .sidebar.open{ transform:translateX(0); }
+    .scrim{
+      position:fixed; inset:0;
+      background:rgba(20,27,34,.4);
+      z-index:35;
+    }
+    .scrim.show{ display:block; }
+    .menu-btn.icon-button{ display:flex; }
+    .topbar{ padding:0 16px; }
+    .today, .profile-btn .txt{ display:none; }
+    .main-content{ padding:14px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .sidebar, .toast{ transition:none; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin"></script>
+</head>
+<body>
+
+  <div class="app-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <a class="sb-brand" href="a_dash.html" target="content-frame" data-title="Dashboard">
+        <img src="img/recon-icon.png" alt="">
+        <div class="word">Reconciliation<em>Pro</em><small>Automated Financial Reconciliation</small></div>
+      </a>
+
+      <div class="nav-group">
+        <div class="nav-label">Workspace</div>
+        <nav class="nav">
+          <a class="nav-item active" href="a_dash.html" target="content-frame"><i data-lucide="house"></i><span>Dashboard</span></a>
+          <a class="nav-item" href="a_faciwithloi.html" target="content-frame"><i data-lucide="building-2"></i><span>Facilities with LOI</span></a>
+          <a class="nav-item" href="a_facinoloi.html" target="content-frame"><i data-lucide="building"></i><span>Facilities without LOI</span></a>
+          <a class="nav-item" href="import.html" target="content-frame" data-show-for="finmarep" hidden><i data-lucide="database"></i><span>Data Ingestion</span></a>
+          <a class="nav-item" href="a_reconciliation.html" target="content-frame"><i data-lucide="git-compare-arrows"></i><span>Reconciliation</span></a>
+          <a class="nav-item" href="a_reports.html" target="content-frame"><i data-lucide="file-text"></i><span>Reports</span></a>
+        </nav>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">System</div>
+        <nav class="nav">
+          <a class="nav-item" href="a_accounts.html" target="content-frame" data-show-for="branch_admin,finmarep_approver" hidden><i data-lucide="users"></i><span>Accounts</span></a>
+          <a class="nav-item" href="a_templates.html" target="content-frame"><i data-lucide="layout-template"></i><span>Templates</span></a>
+          <a class="nav-item" href="a_logs.html" target="content-frame" data-show-for="finmarep,branch_admin" hidden><i data-lucide="clipboard-list"></i><span>System Logs</span></a>
+          <a class="nav-item" href="a_settings.html" target="content-frame" data-show-for="finmarep" hidden><i data-lucide="settings"></i><span>Settings</span></a>
+        </nav>
+      </div>
+
+      <div class="sb-foot">
+        <div class="avatar" data-user="initials"></div>
+        <div class="who"><strong data-user="name"></strong><small data-user="role-org"></small></div>
+        <a href="login.html" data-signout title="Sign out" aria-label="Sign out"><i data-lucide="log-out"></i></a>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <!-- WORKSPACE -->
+    <div class="workspace">
+      <header class="topbar">
+        <button class="icon-button menu-btn" id="menuBtn" aria-label="Open menu"><i data-lucide="menu"></i></button>
+        <div class="page-head">
+          <h1 id="pageTitle">Dashboard</h1>
+          <p id="pageSub">Overview of claims, facilities and reconciliation status</p>
+        </div>
+
+        <div class="topbar-spacer"></div>
+        <div class="today" id="today"></div>
+
+        <div class="profile-menu">
+          <button class="profile-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
+            <div class="avatar" data-user="initials"></div>
+            <div class="txt"><strong data-user="name"></strong><small data-user="role-org"></small></div>
+            <i data-lucide="chevron-down"></i>
+          </button>
+          <div class="dropdown" id="profileMenu" hidden>
+            <a href="my_account.html" target="content-frame" data-title="My Account"><i data-lucide="user"></i>My account</a>
+            <a href="login.html" class="danger" data-signout><i data-lucide="log-out"></i>Sign out</a>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <div class="frame-card">
+          <iframe src="a_dash.html" name="content-frame" title="Main Content"></iframe>
+        </div>
+      </main>
+    </div>
+
+  </div>
+
+  <input id="fileInput" type="file" hidden accept=".csv,.xlsx,.xls" />
+  <div class="toast" id="toast" role="status"></div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <form class="modal" id="hospitalForm">
+      <div class="modal-header">
+        <h2>Add hospital</h2>
+        <button type="button" class="icon-button" id="closeModal" aria-label="Close"><i data-lucide="x"></i></button>
+      </div>
+      <label>Hospital name<input name="name" required placeholder="Example Medical Center"></label>
+      <label>Code<input name="code" required maxlength="6" placeholder="EMC"></label>
+      <div class="modal-actions">
+        <button type="button" id="cancelModal">Cancel</button>
+        <button class="primary" type="submit">Add hospital</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"
+          integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu"
+          crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+  <script>
+    if (window.lucide) lucide.createIcons();
+
+    // Subtitle per page (lalabas sa topbar)
+    const subtitles = {
+      'Dashboard': 'Overview of claims, facilities and reconciliation status',
+      'Facilities with LOI': 'Facilities with a signed Letter of Intent',
+      'Facilities without LOI': 'Facilities still waiting on a Letter of Intent',
+      'Data Ingestion': 'Upload claims and payment files',
+      'Reconciliation': 'Match claims against payment records',
+      'Reports': 'Generate and download reconciliation reports',
+      'Accounts': 'Approve and manage staff accounts',
+      'Templates': 'Manage upload and report templates',
+      'System Logs': 'Activity and audit trail',
+      'Settings': 'System settings',
+      'My Account': 'Your account details and password'
+    };
+
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('scrim');
+    const navItems = document.querySelectorAll('.nav-item');
+
+    function setPage(title){
+      document.getElementById('pageTitle').textContent = title;
+      document.getElementById('pageSub').textContent = subtitles[title] || '';
+      navItems.forEach(a => a.classList.toggle('active', a.textContent.trim() === title));
+    }
+    function closeSidebar(){ sidebar.classList.remove('open'); scrim.classList.remove('show'); }
+
+    navItems.forEach(a => a.addEventListener('click', () => { setPage(a.textContent.trim()); closeSidebar(); }));
+    document.querySelectorAll('[data-title]').forEach(a => a.addEventListener('click', () => { setPage(a.dataset.title); closeSidebar(); }));
+
+    // Mobile menu
+    document.getElementById('menuBtn').addEventListener('click', () => { sidebar.classList.add('open'); scrim.classList.add('show'); });
+    scrim.addEventListener('click', closeSidebar);
+
+    // Profile dropdown
+    const profileBtn = document.getElementById('profileBtn');
+    const profileMenu = document.getElementById('profileMenu');
+    profileBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      profileMenu.hidden = !profileMenu.hidden;
+      profileBtn.setAttribute('aria-expanded', String(!profileMenu.hidden));
+    });
+    document.addEventListener('click', () => { profileMenu.hidden = true; profileBtn.setAttribute('aria-expanded','false'); });
+    profileMenu.addEventListener('click', () => { profileMenu.hidden = true; });
+
+    // Petsa ngayon sa topbar
+    (function(){ const t = new Date(); document.getElementById('today').textContent =
+      String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + '/' + t.getFullYear(); })();
+  </script>
+</body>
+</html>

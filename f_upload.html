@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Upload HF ICS — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility,facility_admin"></script>
+<!-- SheetJS 0.20.3 (self-hosted; ang 0.18.5 sa cdnjs ay may CVE-2023-30533 at CVE-2024-22363) -->
+<script src="js/vendor/xlsx-0.20.3.full.min.js"
+        integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"></script>
+<script src="js/xlsx-import.js"></script>
+<style>
+  :root{
+    --ink:#141B22;
+    --ink-soft:#1F2932;
+    --paper:#F3F4F1;
+    --paper-raised:#FFFFFF;
+    --teal:#1C4A47;
+    --teal-light:#2E6B66;
+    --rust:#A8432C;
+    --slate:#5B6670;
+    --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{
+    font-family:'Inter',sans-serif;
+    background:var(--paper-raised);
+    color:var(--ink);
+    padding:28px;
+  }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 18px; line-height:1.5; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+
+  .row{ display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:180px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .field input[type=number]{ width:110px; }
+  .field select:focus, .field input:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(28,74,71,.12); }
+
+  .drop{
+    display:block; border:1.5px dashed #C3C8C1; border-radius:10px; padding:22px; text-align:center;
+    color:var(--slate); font-size:14px; cursor:pointer; background:var(--paper);
+  }
+  .drop:hover{ border-color:var(--teal); color:var(--teal); }
+  .drop input{ display:none; }
+  .drop strong{ color:var(--teal); }
+
+  .stats{ display:flex; gap:22px; flex-wrap:wrap; font-size:13.5px; margin:4px 0 14px; }
+  .stats b{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; display:block; color:var(--ink); }
+  .stats .warn b{ color:var(--rust); }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:12px; font-weight:600; color:var(--slate); background:var(--paper); padding:9px 12px; white-space:nowrap; }
+  td{ padding:9px 12px; border-top:1px solid var(--line); white-space:nowrap; }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .bad{ color:var(--rust); font-weight:600; }
+  .muted{ color:var(--slate); }
+  .empty{ padding:22px; text-align:center; color:var(--slate); font-size:13.5px; }
+
+  .btn{
+    font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;
+    padding:10px 18px; border-radius:8px; border:1.5px solid var(--line);
+    background:var(--paper-raised); color:var(--ink);
+  }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; }
+  .btn-primary:hover{ background:var(--teal-light); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+
+  .progress{ height:10px; background:var(--paper); border-radius:6px; overflow:hidden; margin:14px 0 6px; }
+  .progress div{ height:100%; width:0; background:var(--teal); transition:width .2s ease; }
+  .progress-text{ font-size:12.5px; color:var(--slate); }
+
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:16px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+
+  .status{ font-size:12px; font-weight:600; padding:2px 8px; border-radius:20px; }
+  .status.complete{ background:#E2EEEC; color:var(--teal); }
+  .status.uploading{ background:#F7EEDD; color:#8A6224; }
+  .status.failed{ background:#FBEAE6; color:var(--rust); }
+
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--slate); }
+  .pager .btn{ font-size:13px; padding:6px 12px; }
+
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Upload HF ICS</h2>
+    <p class="sub">Upload your facility's ICS report (.xlsx). Choose the sheet and confirm which columns hold the
+      Claim Series and the ICS amount. Your data is only visible to your facility and PhilHealth.</p>
+
+    <div id="tplBox" hidden style="background:var(--paper); border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:13px">
+      <strong>Blank templates from PhilHealth</strong>
+      <div id="tplList" style="display:flex; flex-direction:column; gap:8px; margin-top:8px"></div>
+    </div>
+
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+    <label class="drop" id="drop">
+      <input type="file" id="fileInput" accept=".xlsx">
+      <span id="dropText"><strong>Choose an .xlsx file</strong> to start</span>
+    </label>
+
+    <div id="setup" hidden>
+      <div class="row" style="margin-top:18px">
+        <div class="field">
+          <label for="sheetSelect">Sheet</label>
+          <select id="sheetSelect"></select>
+        </div>
+        <div class="field">
+          <label for="headerRow">Header row</label>
+          <input type="number" id="headerRow" min="1">
+        </div>
+        <div class="field">
+          <label for="seriesCol">Claim Series column</label>
+          <select id="seriesCol"></select>
+        </div>
+        <div class="field">
+          <label for="amountCol">ICS amount column</label>
+          <select id="amountCol"></select>
+        </div>
+        <div class="field">
+          <label for="refCol">Patient Reference No. column (optional)</label>
+          <select id="refCol"></select>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div>Rows with data<b id="statRows">0</b></div>
+        <div class="warn">Invalid Claim Series<b id="statInvalid">0</b></div>
+        <div>Total ICS amount<b id="statAmount">0.00</b></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Excel row</th><th>Claim Series (as in file)</th><th>Claim Series (13 digits)</th><th>ICS amount</th></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:12.5px; margin:8px 0 16px">Showing the first 5 rows. Rows with an invalid Claim Series
+        (fewer than 13 digits, e.g. a totals row) are uploaded but flagged and will not be matched.</p>
+
+      <button class="btn btn-primary" type="button" id="uploadBtn">Upload</button>
+      <div id="progressWrap" hidden>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div class="progress-text" id="progressText"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Previous uploads</h2>
+    <p class="sub">PhilHealth uses your latest completed upload when it runs the reconciliation.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Uploaded</th><th>File</th><th>Sheet</th><th>Status</th><th>Rows</th><th>Invalid series</th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+      <div class="empty" id="histEmpty" hidden>No uploads yet.</div>
+    </div>
+    <div class="pager">
+      <span id="histRange"></span>
+      <button class="btn" type="button" id="histPrev" disabled>Previous</button>
+      <button class="btn" type="button" id="histNext" disabled>Next</button>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const X = window.XlsxImport;
+  const CHUNK = 2000;
+  const HIST_PAGE = 10;
+  const SERIES_HEADER = [/claim\s*series/i, /\bcsn\b/i, /^series$/i];
+
+  const $ = function(id){ return document.getElementById(id); };
+  const el = {
+    msg: $('msg'), fileInput: $('fileInput'), dropText: $('dropText'), setup: $('setup'),
+    sheet: $('sheetSelect'), headerRow: $('headerRow'), seriesCol: $('seriesCol'), amountCol: $('amountCol'), refCol: $('refCol'),
+    statRows: $('statRows'), statInvalid: $('statInvalid'), statAmount: $('statAmount'),
+    preview: $('previewBody'), uploadBtn: $('uploadBtn'),
+    progressWrap: $('progressWrap'), progressBar: $('progressBar'), progressText: $('progressText'),
+    histBody: $('histBody'), histEmpty: $('histEmpty'), histRange: $('histRange'), histPrev: $('histPrev'), histNext: $('histNext')
+  };
+  const state = { file: null, wb: null, ws: null, headers: [], headerRow: 0, histOffset: 0, busy: false };
+
+  await window.sbUserReady;
+
+  // ---------- helpers ----------
+  function showMsg(text, kind){ el.msg.textContent = text; el.msg.className = 'msg show ' + kind; }
+  function clearMsg(){ el.msg.className = 'msg'; }
+  function td(text, cls){ const c = document.createElement('td'); c.textContent = text; if (cls) c.className = cls; return c; }
+  // MM/DD/YYYY HH:MM (hindi nakadepende sa locale ng browser)
+  function fmtTs(ts){
+    const t = new Date(ts), pad = function(n){ return String(n).padStart(2, '0'); };
+    return pad(t.getMonth() + 1) + '/' + pad(t.getDate()) + '/' + t.getFullYear() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes());
+  }
+  function fmtAmount(n){ return n === null ? '—' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  // Pareho ng SQL rule; para sa preview lang — ang DB ang awtoritatibo
+  function normalizeSeries(raw){
+    const d = (raw || '').replace(/\D/g, '');
+    return d.length >= 13 ? d.slice(0, 13) : null;
+  }
+  function fillSelect(sel, options, pick){
+    sel.replaceChildren();
+    options.forEach(function(h){ sel.add(new Option(h.letter + ' · ' + h.name, String(h.col))); });
+    if (pick !== null && pick !== undefined) sel.value = String(pick);
+  }
+  function guess(re){
+    const h = state.headers.find(function(x){ return re.test(x.name); });
+    return h ? h.col : (state.headers[0] ? state.headers[0].col : null);
+  }
+
+  // Bawat data row (pagkatapos ng header) na may Claim Series o ICS amount: [r, raw, amt]
+  function* dataRows(){
+    const rg = X.range(state.ws);
+    if (!rg) return;
+    const sCol = +el.seriesCol.value, aCol = +el.amountCol.value;
+    for (let r = state.headerRow + 1; r <= rg.e.r; r++) {
+      const raw = X.seriesText(X.cell(state.ws, r, sCol));
+      const amt = X.amount(X.cell(state.ws, r, aCol));
+      if (raw === null && amt === null) continue;
+      yield [r, raw, amt];
+    }
+  }
+
+  // ---------- steps ----------
+  function onSheet(){
+    state.ws = state.wb.Sheets[el.sheet.value];
+    state.headerRow = X.detectHeaderRow(state.ws, SERIES_HEADER, 30);
+    el.headerRow.value = state.headerRow + 1;
+    onHeader();
+  }
+
+  function onHeader(){
+    state.headerRow = Math.max(0, (+el.headerRow.value || 1) - 1);
+    state.headers = X.headers(state.ws, state.headerRow);
+    fillSelect(el.seriesCol, state.headers, guess(/claim\s*series|\bcsn\b|series/i));
+    fillSelect(el.amountCol, state.headers, guess(/ics.*(amount|amt)|amount|amt/i));
+    // Optional: walang pipiliin kung walang header na mukhang patient reference no.
+    fillSelect(el.refCol, state.headers, null);
+    el.refCol.insertBefore(new Option('— not in file —', ''), el.refCol.firstChild);
+    const ref = state.headers.find(function(x){ return /patient.*(ref|no|number)|reference\s*(no|number)|hospital\s*no/i.test(x.name); });
+    el.refCol.value = ref ? String(ref.col) : '';
+    preview();
+  }
+
+  function preview(){
+    el.preview.replaceChildren();
+    let rows = 0, invalid = 0, total = 0;
+    for (const [r, raw, amt] of dataRows()) {
+      rows++;
+      const norm = normalizeSeries(raw);
+      if (!norm) invalid++;
+      if (amt !== null) total += amt;
+      if (rows <= 5) {
+        const tr = document.createElement('tr');
+        tr.append(td(String(r + 1)), td(raw || '—'), td(norm || 'Invalid', norm ? '' : 'bad'), td(fmtAmount(amt), 'num'));
+        el.preview.append(tr);
+      }
+    }
+    el.statRows.textContent = rows.toLocaleString();
+    el.statInvalid.textContent = invalid.toLocaleString();
+    el.statAmount.textContent = fmtAmount(Math.round(total * 100) / 100);
+    el.uploadBtn.disabled = rows === 0 || state.busy;
+  }
+
+  async function upload(){
+    const sCol = +el.seriesCol.value, aCol = +el.amountCol.value;
+    if (sCol === aCol) { showMsg('Claim Series and ICS amount must be different columns.', 'err'); return; }
+    if (!confirm('Upload ' + el.statRows.textContent + ' rows from "' + state.file.name + '"?')) return;
+
+    clearMsg();
+    state.busy = true;
+    el.uploadBtn.disabled = true;
+    el.fileInput.disabled = true;
+    el.progressWrap.hidden = false;
+
+    const seriesH = state.headers.find(function(h){ return h.col === sCol; });
+    const amountH = state.headers.find(function(h){ return h.col === aCol; });
+    const rCol = el.refCol.value === '' ? null : +el.refCol.value;
+    if (rCol !== null && (rCol === sCol || rCol === aCol)) {
+      showMsg('Patient Reference No. must be a different column from Claim Series and ICS amount.', 'err'); return;
+    }
+    const refH = rCol === null ? null : state.headers.find(function(h){ return h.col === rCol; });
+    const others = state.headers.filter(function(h){ return h.col !== sCol && h.col !== aCol && h.col !== rCol; });
+    const totalRows = +el.statRows.textContent.replace(/\D/g, '');
+    let submissionId = null, sent = 0;
+
+    try {
+      const { data: id, error: startErr } = await sb.rpc('start_hf_ics_submission', {
+        p_file_name: state.file.name,
+        p_sheet_name: el.sheet.value,
+        p_header_row: state.headerRow + 1,
+        p_column_map: Object.assign({ claim_series: seriesH.name, ics_amount: amountH.name }, refH ? { patient_ref: refH.name } : {})
+      });
+      if (startErr) throw startErr;
+      submissionId = id;
+
+      let batch = [];
+      async function flush(){
+        if (!batch.length) return;
+        const { error } = await sb.rpc('add_hf_ics_rows', { p_submission: submissionId, p_rows: batch });
+        if (error) throw error;
+        sent += batch.length;
+        batch = [];
+        const pct = totalRows ? Math.round(sent / totalRows * 100) : 100;
+        el.progressBar.style.width = pct + '%';
+        el.progressText.textContent = 'Uploaded ' + sent.toLocaleString() + ' of ' + totalRows.toLocaleString() + ' rows (' + pct + '%)';
+      }
+
+      // Paunti-unti: binubuo at ipinapadala ang bawat batch habang binabasa (rule 6)
+      for (const [r, raw, amt] of dataRows()) {
+        // walang prototype (hal. header na "__proto__"); may budget para hindi lumampas sa 8 KB na limit ng DB
+        const extra = Object.create(null);
+        let budget = 6000;
+        others.forEach(function(h){
+          const t = X.cellText(X.cell(state.ws, r, h.col));
+          if (t === null || budget <= 0) return;
+          const v = t.slice(0, Math.min(300, budget));
+          extra[h.name] = v;
+          budget -= v.length + h.name.length + 8;
+        });
+        batch.push({
+          row_no: r + 1,
+          claim_series_raw: raw,
+          ics_amount: amt,
+          ics_amount_raw: X.cellText(X.cell(state.ws, r, aCol)),
+          // Laging text (kahit numero ang cell sa Excel), gaya ng Claim Series
+          patient_ref: rCol === null ? null : X.seriesText(X.cell(state.ws, r, rCol)),
+          extra: extra
+        });
+        if (batch.length >= CHUNK) await flush();
+      }
+      await flush();
+
+      const { error: finErr } = await sb.rpc('finish_hf_ics_submission', { p_submission: submissionId });
+      if (finErr) throw finErr;
+      showMsg('Upload complete: ' + sent.toLocaleString() + ' rows from "' + state.file.name + '".', 'ok');
+      resetForm();
+    } catch (err) {
+      if (submissionId) await sb.rpc('fail_hf_ics_submission', { p_submission: submissionId });
+      showMsg('Upload failed after ' + sent.toLocaleString() + ' rows: ' + (err.message || err) +
+              '. Nothing from this upload will be used. Please try again.', 'err');
+    } finally {
+      state.busy = false;
+      el.fileInput.disabled = false;
+      el.uploadBtn.disabled = !state.ws;
+      loadHistory();
+    }
+  }
+
+  function resetForm(){
+    state.file = state.wb = state.ws = null;
+    el.fileInput.value = '';
+    el.setup.hidden = true;
+    el.progressWrap.hidden = true;
+    el.progressBar.style.width = '0';
+    el.dropText.replaceChildren();
+    const s = document.createElement('strong');
+    s.textContent = 'Choose an .xlsx file';
+    el.dropText.append(s, document.createTextNode(' to start'));
+  }
+
+  // ---------- history (paginated) ----------
+  async function loadHistory(){
+    const { data, error, count } = await sb.from('hf_ics_submissions')
+      .select('file_name, sheet_name, status, row_count, invalid_series_count, created_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(state.histOffset, state.histOffset + HIST_PAGE - 1);
+    el.histBody.replaceChildren();
+    if (error) { showMsg('Could not load previous uploads: ' + error.message, 'err'); return; }
+    data.forEach(function(s){
+      const tr = document.createElement('tr');
+      const st = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = 'status ' + s.status;
+      badge.textContent = s.status;
+      st.append(badge);
+      tr.append(
+        td(fmtTs(s.created_at)),
+        td(s.file_name),
+        td(s.sheet_name || '—'),
+        st,
+        td(s.row_count.toLocaleString(), 'num'),
+        td(s.invalid_series_count.toLocaleString(), 'num' + (s.invalid_series_count ? ' bad' : ''))
+      );
+      el.histBody.append(tr);
+    });
+    el.histEmpty.hidden = data.length > 0;
+    const total = count || 0;
+    el.histRange.textContent = total ? (state.histOffset + 1) + '–' + (state.histOffset + data.length) + ' of ' + total : '';
+    el.histPrev.disabled = state.histOffset === 0;
+    el.histNext.disabled = state.histOffset + data.length >= total;
+  }
+
+  // ---------- events ----------
+  el.fileInput.addEventListener('change', async function(){
+    const f = el.fileInput.files[0];
+    if (!f) return;
+    clearMsg();
+    if (!/\.xlsx$/i.test(f.name)) { showMsg('Please choose an .xlsx file.', 'err'); return; }
+    el.dropText.textContent = 'Reading "' + f.name + '"…';
+    try {
+      state.file = f;
+      state.wb = await X.readWorkbook(f);
+      el.sheet.replaceChildren();
+      state.wb.SheetNames.forEach(function(n){ el.sheet.add(new Option(n, n)); });
+      const ics = state.wb.SheetNames.find(function(n){ return /^\s*ics\s*$/i.test(n); });
+      el.sheet.value = ics || state.wb.SheetNames[0];
+      el.dropText.textContent = f.name + ' — click to choose a different file';
+      el.setup.hidden = false;
+      onSheet();
+    } catch (err) {
+      resetForm();
+      showMsg('Could not read this file: ' + (err.message || err), 'err');
+    }
+  });
+  el.sheet.addEventListener('change', onSheet);
+  el.headerRow.addEventListener('change', onHeader);
+  el.seriesCol.addEventListener('change', preview);
+  el.amountCol.addEventListener('change', preview);
+  el.uploadBtn.addEventListener('click', upload);
+  el.histPrev.addEventListener('click', function(){ state.histOffset = Math.max(0, state.histOffset - HIST_PAGE); loadHistory(); });
+  el.histNext.addEventListener('click', function(){ state.histOffset += HIST_PAGE; loadHistory(); });
+
+  loadHistory();
+})();
+
+// Mga blankong template mula sa PhilHealth (RLS: active at visible to facilities lang)
+(async function(){
+  await window.sbUserReady;
+  const { data, error } = await sb.from('templates')
+    .select('name, description, file_path, file_name')
+    .order('uploaded_at', { ascending: false }).limit(10);
+  if (error || !data || !data.length) return;
+  const list = document.getElementById('tplList');
+  data.forEach(function(t){
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn'; btn.textContent = 'Download';
+    btn.style.cssText = 'font-size:12.5px; padding:5px 10px';
+    btn.addEventListener('click', async function(){
+      const r = await sb.storage.from('templates').createSignedUrl(t.file_path, 60, { download: t.file_name });
+      if (r.error) { alert('Could not download: ' + r.error.message); return; }
+      window.location.href = r.data.signedUrl;
+    });
+    const name = document.createElement('div'); name.textContent = t.name;
+    const info = document.createElement('div'); info.style.flex = '1'; info.append(name);
+    if (t.description) {
+      const d = document.createElement('div'); d.className = 'muted'; d.textContent = t.description;
+      d.style.cssText = 'font-size:12px; color:var(--slate)'; info.append(d);
+    }
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:10px; align-items:center';
+    row.append(info, btn);
+    list.append(row);
+  });
+  document.getElementById('tplBox').hidden = false;
+})();
+</script>
+</body>
+</html>

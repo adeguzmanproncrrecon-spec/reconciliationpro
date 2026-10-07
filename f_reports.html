@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reports — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility,facility_admin"></script>
+<script src="js/annex-view.js"></script>
+<!-- SheetJS 0.20.3 (self-hosted, may SRI) para sa Excel export -->
+<script src="js/vendor/xlsx-0.20.3.full.min.js"
+        integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"></script>
+<script src="js/export-xlsx.js"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+    --st-process:#3E5C76; --st-process-bg:#EAF0F5;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  h3{ font-size:14.5px; margin:0 0 10px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .bad{ color:var(--rust); font-weight:600; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .btn{ font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:5px 10px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); white-space:nowrap; vertical-align:middle; }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  tr.pick{ cursor:pointer; }
+  tr.pick:hover td{ background:#F7F8F5; }
+  tr.selected td{ background:#E6EFEC; }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  .status{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .s-PAID, .s-current{ background:#E2EEEC; color:var(--teal); }
+  .s-APPROVED{ background:#F7EEDD; color:var(--amber); }
+  .s-DENIED, .s-UNMATCHED, .s-UNMAPPED{ background:#FBEAE6; color:var(--rust); }
+  .s-RTH{ background:#F7EEDD; color:#8A6224; }
+  .s-IN{ background:var(--st-process-bg); color:var(--st-process); }
+  .s-DUPLICATE, .s-NOT, .s-FOR{ background:var(--paper); color:var(--slate); }
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:14px; overflow-x:auto; }
+  .tab{ font-family:inherit; font-size:13.5px; font-weight:600; color:var(--slate); background:none; border:none;
+        border-bottom:2.5px solid transparent; padding:9px 12px 10px; cursor:pointer; white-space:nowrap; }
+  .tab.active{ color:var(--teal); border-bottom-color:var(--teal); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="card">
+    <h2>Reconciliation reports</h2>
+    <p class="sub">Results of PhilHealth's reconciliation of your facility's ICS. Choose a report to view its Annex A and Matching Report.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Report date</th><th>Previous report date</th><th>Matching date</th><th>Matched on</th><th class="num">Claims</th><th></th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden>No reconciliation reports yet. Reports appear here after PhilHealth runs the matching.</div>
+    </div>
+    <div class="pager"><span id="listRange"></span>
+      <button class="btn" type="button" id="listPrev" disabled>Previous</button>
+      <button class="btn" type="button" id="listNext" disabled>Next</button></div>
+  </div>
+
+  <div class="card" id="detail" hidden>
+    <div class="tabs" role="tablist">
+      <button class="tab active" type="button" data-tab="annex">Annex A</button>
+      <button class="tab" type="button" data-tab="report">Matching Report</button>
+    </div>
+
+    <div data-panel="annex">
+      <div class="row"><button class="btn" type="button" id="annexExport">Export Annex A (Excel)</button></div>
+      <div id="annexBody"></div>
+    </div>
+
+    <div data-panel="report" hidden>
+      <div class="row">
+        <div class="field"><label for="repStatus">Status (report date)</label><select id="repStatus"></select></div>
+        <div class="field"><label for="repSearch">Claim series</label><input type="search" id="repSearch" placeholder="13 digits" inputmode="numeric"></div>
+        <button class="btn" type="button" id="repExport">Export Matching Report (Excel)</button>
+        <span class="muted" id="repExportText"></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th class="num">Item</th><th>Claim series</th><th>Patient</th><th>Admission</th><th>Discharge</th><th>Filed</th>
+          <th class="num">ICS amount</th><th>Status (report)</th><th>Status (prev.)</th><th>Status (matching)</th>
+          <th>Mode of payment</th><th>Check no.</th><th>Check date</th><th class="num">Amount paid</th>
+          <th class="num">Recon amount</th><th class="num">Upgrade (downgrade)</th><th class="num">Filed vs actual payment upgrade</th>
+          <th>Reconciling item</th><th>Annex A line (HF)</th><th>Annex A line (PhilHealth)</th><th>RTH/Denied ctrl no.</th><th>Patient ref. no.</th>
+          <th>Case rate (1st / 2nd)</th><th>Health care professional</th><th>History effect</th>
+          <th>MR status (received)</th><th>PARD status (received)</th>
+        </tr></thead>
+        <tbody id="repBody"></tbody>
+      </table><div class="empty" id="repEmpty" hidden>No rows.</div></div>
+      <div class="pager"><span id="repRange"></span>
+        <button class="btn" type="button" id="repPrev" disabled>Previous</button>
+        <button class="btn" type="button" id="repNext" disabled>Next</button></div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const LIST_PAGE = 10, PAGE = 50;
+  const STATUSES = ['PAID', 'APPROVED FOR PAYMENT', 'DENIED', 'RTH', 'IN PROCESS', 'UNMATCHED', 'UNMAPPED', 'DUPLICATE', 'NOT YET FILED'];
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { listOffset: 0, match: null, repOffset: 0 };
+  await window.sbUserReady;
+
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function td(t, cls){ return h('td', { class: cls || '', text: t === null || t === undefined ? '—' : String(t) }); }
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  function money(n){ return n === null || n === undefined ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function badge(s){ return h('span', { class: 'status s-' + String(s || '').split(' ')[0], text: s || '—' }); }
+  function withDate(v, d){ return v || d ? (v || '—') + (d ? ' (' + fmtDate(d) + ')' : '') : '—'; }
+  function showErr(t){ const m = $('msg'); m.textContent = t; m.className = 'msg show err'; }
+  function pager(p, offset, shown, total){
+    $(p + 'Range').textContent = total ? (offset + 1) + '–' + (offset + shown) + ' of ' + total.toLocaleString() : '';
+    $(p + 'Prev').disabled = offset === 0;
+    $(p + 'Next').disabled = offset + shown >= total;
+  }
+
+  // ---------- listahan ng natapos na matching (RLS: sariling facility lang) ----------
+  async function loadList(){
+    const { data, error, count } = await sb.from('recon_matches')
+      .select('id, report_date, prev_report_date, matching_date, finished_at, is_current, summary', { count: 'exact' })
+      .eq('status', 'done').order('finished_at', { ascending: false })
+      .range(state.listOffset, state.listOffset + LIST_PAGE - 1);
+    const body = $('listBody'); body.replaceChildren();
+    if (error) { showErr('Could not load reports: ' + error.message); return; }
+    data.forEach(function(m){
+      body.append(h('tr', { class: 'pick' + (state.match && state.match.id === m.id ? ' selected' : ''), onclick: function(){ openMatch(m); } }, [
+        td(fmtDate(m.report_date)), td(fmtDate(m.prev_report_date)), td(fmtDate(m.matching_date)), td(fmtTs(m.finished_at)),
+        td(m.summary && m.summary.hf_rows !== undefined ? Number(m.summary.hf_rows).toLocaleString() : '—', 'num'),
+        h('td', {}, [m.is_current ? h('span', { class: 'status s-current', text: 'latest' }) : null])
+      ]));
+    });
+    $('listEmpty').hidden = data.length > 0;
+    pager('list', state.listOffset, data.length, count || 0);
+  }
+
+  function openMatch(m){
+    state.match = m; state.repOffset = 0;
+    $('detail').hidden = false;
+    state.annex = null;
+    AnnexView.load($('annexBody'), m.id, false).then(function(a){ state.annex = a; });   // facility version lang
+    loadReport();
+    loadList();
+  }
+
+  // ---------- Matching Report (paginated) ----------
+  (function(){ const s = $('repStatus'); s.add(new Option('All', '')); STATUSES.forEach(function(x){ s.add(new Option(x, x)); }); })();
+  async function loadReport(){
+    let q = sb.from('recon_hf_results')
+      .select('item_no, claim_series, claim_series_raw, pat_lname, pat_fname, date_adm, date_dis, date_filed, ics_amount, status_rd, status_pd, status_md, mode_of_payment, check_no, check_dt, total_amount_paid, recon_amount, upgrade_downgrade, reconciling_item, ctrl_no, first_case_rate, second_case_rate, health_professional, history_effect, mr_status, mr_rcv_date, pard_status, pard_rcv_date, filed_vs_actual, patient_ref, annex_hf_line, annex_ph_line', { count: 'exact' })
+      .eq('match_id', state.match.id).order('item_no').range(state.repOffset, state.repOffset + PAGE - 1);
+    if ($('repStatus').value) q = q.eq('status_rd', $('repStatus').value);
+    const s = $('repSearch').value.replace(/\D/g, '');
+    if (s) q = q.like('claim_series', s + '%');
+    const { data, error, count } = await q;
+    const body = $('repBody'); body.replaceChildren();
+    if (error) { showErr('Could not load the matching report: ' + error.message); return; }
+    data.forEach(function(x){
+      body.append(h('tr', {}, [
+        td(x.item_no, 'num'),
+        h('td', {}, [h('div', { text: x.claim_series || 'INVALID' }), x.claim_series ? null : h('div', { class: 'muted', text: x.claim_series_raw || '(blank)' })]),
+        td([x.pat_lname, x.pat_fname].filter(Boolean).join(', ') || '—'),
+        td(fmtDate(x.date_adm)), td(fmtDate(x.date_dis)), td(fmtDate(x.date_filed)),
+        td(money(x.ics_amount), 'num'),
+        h('td', {}, [badge(x.status_rd)]),
+        h('td', {}, [x.status_pd ? badge(x.status_pd) : document.createTextNode('—')]),
+        h('td', {}, [badge(x.status_md)]),
+        td(x.mode_of_payment), td(x.check_no), td(fmtDate(x.check_dt)), td(money(x.total_amount_paid), 'num'),
+        td(money(x.recon_amount), 'num'), td(money(x.upgrade_downgrade), 'num'), td(money(x.filed_vs_actual), 'num'),
+        td(x.reconciling_item), td(x.annex_hf_line), td(x.annex_ph_line), td(x.ctrl_no), td(x.patient_ref),
+        td([x.first_case_rate, x.second_case_rate].filter(Boolean).join(' | ') || '—'),
+        td(x.health_professional), td(x.history_effect),
+        td(withDate(x.mr_status, x.mr_rcv_date)), td(withDate(x.pard_status, x.pard_rcv_date))
+      ]));
+    });
+    $('repEmpty').hidden = data.length > 0;
+    pager('rep', state.repOffset, data.length, count || 0);
+  }
+
+  // ---------- Excel export (facility version lang) ----------
+  $('annexExport').addEventListener('click', async function(){
+    this.disabled = true;
+    try { await ReconExport.exportAnnex(state.match.id, false); }
+    catch (err) { showErr('Export failed: ' + (err.message || err)); }
+    finally { this.disabled = false; }
+  });
+  $('repExport').addEventListener('click', async function(){
+    const btn = this, txt = $('repExportText');
+    btn.disabled = true; txt.textContent = 'Preparing…';
+    try {
+      const hd = state.annex ? state.annex.header : {};
+      const m = Object.assign({}, state.match, { hospital_name: hd.hospital_name, accreditation_no: hd.accreditation_no });
+      const n = await ReconExport.exportMatchingReport(m, function(rows, total){
+        txt.textContent = 'Building Excel file… ' + rows.toLocaleString() + (total ? ' of ' + total.toLocaleString() : '') + ' rows';
+      });
+      txt.textContent = 'Downloaded (' + (n / 1048576).toFixed(1) + ' MB).';
+    } catch (err) { txt.textContent = ''; showErr('Export failed: ' + (err.message || err)); }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- events ----------
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x === t); });
+      document.querySelectorAll('[data-panel]').forEach(function(p){ p.hidden = p.dataset.panel !== t.dataset.tab; });
+    });
+  });
+  let timer;
+  $('repSearch').addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(function(){ state.repOffset = 0; loadReport(); }, 300); });
+  $('repStatus').addEventListener('change', function(){ state.repOffset = 0; loadReport(); });
+  $('repPrev').addEventListener('click', function(){ state.repOffset = Math.max(0, state.repOffset - PAGE); loadReport(); });
+  $('repNext').addEventListener('click', function(){ state.repOffset += PAGE; loadReport(); });
+  $('listPrev').addEventListener('click', function(){ state.listOffset = Math.max(0, state.listOffset - LIST_PAGE); loadList(); });
+  $('listNext').addEventListener('click', function(){ state.listOffset += LIST_PAGE; loadList(); });
+
+  loadList();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="tl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReconciliationPro – System Review</title>
+<style>
+  :root{
+    --ink:#141B22; --soft:#3A4652; --paper:#F3F4F1; --white:#FFFFFF; --line:#DADDD7;
+    --teal:#1C4A47; --teal-bg:#E2EEEC; --rust:#A8432C; --rust-bg:#FBEAE6; --amber:#8A6224; --amber-bg:#F7EEDD;
+    --blue:#3E5C76; --blue-bg:#EAF0F5;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.6 "Segoe UI", Arial, sans-serif; }
+  .page{ max-width:980px; margin:0 auto; padding:40px 24px 60px; }
+  header{ border-bottom:3px solid var(--teal); padding-bottom:16px; margin-bottom:28px; }
+  h1{ font-family:Georgia, "Times New Roman", serif; font-weight:normal; font-size:30px; margin:0 0 6px; color:var(--teal); }
+  .meta{ color:var(--soft); font-size:13.5px; }
+  h2{ font-family:Georgia, "Times New Roman", serif; font-weight:normal; font-size:21px; color:var(--teal); margin:36px 0 10px; }
+  h3{ font-size:15px; margin:22px 0 8px; }
+  p{ margin:8px 0; }
+  .summary{ display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin:18px 0 8px; }
+  .tile{ background:var(--white); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .tile b{ display:block; font-size:24px; font-family:Georgia, serif; font-weight:normal; }
+  .tile span{ font-size:13px; color:var(--soft); }
+  .tile.ok b{ color:var(--teal); } .tile.warn b{ color:var(--amber); } .tile.bad b{ color:var(--rust); }
+  .callout{ background:var(--rust-bg); border-left:4px solid var(--rust); border-radius:6px; padding:12px 16px; margin:16px 0; }
+  .callout.info{ background:var(--blue-bg); border-left-color:var(--blue); }
+  table{ width:100%; border-collapse:collapse; background:var(--white); border:1px solid var(--line); border-radius:10px; overflow:hidden; font-size:14px; margin:10px 0; }
+  th{ text-align:left; background:var(--paper); color:var(--soft); font-size:12.5px; font-weight:600; padding:9px 12px; border-bottom:1px solid var(--line); }
+  td{ padding:10px 12px; border-top:1px solid var(--line); vertical-align:top; }
+  td.n{ width:36px; color:var(--soft); }
+  .tag{ display:inline-block; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .t-high{ background:var(--rust-bg); color:var(--rust); }
+  .t-med{ background:var(--amber-bg); color:var(--amber); }
+  .t-low{ background:var(--blue-bg); color:var(--blue); }
+  .t-ok{ background:var(--teal-bg); color:var(--teal); }
+  ul{ margin:6px 0; padding-left:22px; }
+  li{ margin:4px 0; }
+  code{ font-family:Consolas, monospace; font-size:13px; background:var(--paper); padding:1px 5px; border-radius:4px; }
+  ol.steps > li{ margin:10px 0; }
+  footer{ margin-top:40px; padding-top:14px; border-top:1px solid var(--line); color:var(--soft); font-size:12.5px; }
+  @media print{
+    body{ background:#fff; font-size:12.5px; }
+    .page{ padding:0; max-width:none; }
+    table, .tile, .callout{ break-inside:avoid; }
+    h2{ break-after:avoid; }
+  }
+  @media (max-width:640px){ .page{ padding:24px 16px 40px; } table{ font-size:13px; } td, th{ padding:8px; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>ReconciliationPro – System Review</h1>
+  <div class="meta">Technical at process review ng system bago ang susunod na yugto · Huling update: 10/07/2026</div>
+</header>
+
+<p>Ang ReconciliationPro ay papalit sa Excel reconciliation workbook (HF ICS vs. HO ICS vs. extractions ng FINMAREP),
+na may portal para sa PhilHealth at para sa mga facility. Inilalahad ng review na ito kung ano na ang tapos, ano ang kulang
+pa sa technical na bahagi, at aling mga desisyon sa proseso ang kailangan bago ito gamitin sa totoong data.</p>
+
+<div class="summary">
+  <div class="tile ok"><b>Tapos</b><span>Lahat ng page sa PhilHealth at facility portal</span></div>
+  <div class="tile ok"><b>0</b><span>Kritikal na isyu sa security (lahat ng table ay may RLS)</span></div>
+  <div class="tile warn"><b>9</b><span>Technical na dapat ayusin o tapusin</span></div>
+  <div class="tile bad"><b>8</b><span>Desisyon sa proseso na kailangan</span></div>
+</div>
+
+<div class="callout"><b>Unang dapat gawin:</b> burahin ang <code>docs/samples/TEMPLATE_ANNEX_A_blank.xlsx</code>. May natitira pa
+itong isang tunay na pangalan at link sa lumang workbook. Ang malinis na kopya na ginagamit ng system ay nasa
+<code>templates/annex-a.xlsx</code>.</div>
+
+<h2>1. Kasalukuyang kalagayan</h2>
+<table>
+  <tr><th>Bahagi</th><th>Laman</th><th>Kalagayan</th></tr>
+  <tr><td>Accounts</td><td>Registration, approval (Branch Admin, FINMAREP approver, Facility Admin), branch assignment, My Account (pagpapalit ng password)</td><td><span class="tag t-ok">Tapos</span></td></tr>
+  <tr><td>Facility portal</td><td>Dashboard, Upload Claims (HF ICS), Reports (Annex A at Matching Report), Letter of Intent, Facility Profile, Staff Accounts</td><td><span class="tag t-ok">Tapos</span></td></tr>
+  <tr><td>PhilHealth portal</td><td>Dashboard, Facilities with/without LOI, Data Ingestion, Reconciliation, Reports, Accounts, Templates, System Logs, Settings</td><td><span class="tag t-ok">Tapos</span></td></tr>
+  <tr><td>Matching</td><td>Background job (hanggang 30 minuto bawat run); Yugto 2 data; Claim History; Issue at Payment TAT</td><td><span class="tag t-ok">Tapos</span> 50k claims ≈ 2 min</td></tr>
+  <tr><td>Annex A</td><td>Balanse sa bilang at halaga (internal at facility version); export gamit ang mismong template ng PhilHealth</td><td><span class="tag t-ok">Tapos</span> Difference = 0 sa test</td></tr>
+  <tr><td>Database</td><td>33 migrations, lahat naka-save sa <code>supabase/migrations/</code></td><td>265 MB sa 500 MB (Free plan)</td></tr>
+</table>
+
+<h2>2. Technical – dapat ayusin o tapusin</h2>
+<table>
+  <tr><th>#</th><th>Item</th><th>Bakit mahalaga</th><th>Priority</th></tr>
+  <tr><td class="n">T1</td><td><b>Walang version control (git) at backup ng code</b></td><td>Kapag nasira o nabura ang project folder, walang mababalikan. Pinakamalaking panganib sa ngayon.</td><td><span class="tag t-high">Mataas</span></td></tr>
+  <tr><td class="n">T2</td><td><b>Hindi pa naka-host</b> ang system (local na file pa lang ang mga page)</td><td>Hindi pa ito magagamit ng facility o ng ibang branch.</td><td><span class="tag t-high">Mataas</span></td></tr>
+  <tr><td class="n">T3</td><td><b>Lumalaki ang log ng scheduled jobs</b> (<code>cron.job_run_details</code>): mga 2,880 row bawat araw, walang naglilinis</td><td>Unti-unting kakainin ang 500 MB na limit. Kailangan ng lingguhang paglilinis.</td><td><span class="tag t-med">Katamtaman</span></td></tr>
+  <tr><td class="n">T4</td><td><b>Walang retention policy</b> sa lumang matching results at uploads</td><td>Mga 4 KB bawat claim bawat run ang naiiwan; mabilis mapupuno ang disk sa paulit-ulit na run.</td><td><span class="tag t-med">Katamtaman</span></td></tr>
+  <tr><td class="n">T5</td><td><b>33 foreign key na walang index</b>, kasama ang malalaking raw table (Raw Matching, Status Trail, HF ICS rows…)</td><td>Magiging mabagal ang pag-discard ng upload at ang retention sa 50k–200k na row.</td><td><span class="tag t-med">Katamtaman</span></td></tr>
+  <tr><td class="n">T6</td><td>May naka-deploy pang lumang Edge Function (<code>export-matching-report</code>) na hindi na ginagamit</td><td>Dagdag na bahaging nakabukas; dapat alisin.</td><td><span class="tag t-low">Mababa</span></td></tr>
+  <tr><td class="n">T7</td><td>Naka-off ang <b>leaked password protection</b></td><td>Pinipigilan nito ang mga password na na-leak na sa ibang site. Kailangan ng Pro plan.</td><td><span class="tag t-low">Mababa</span> (production)</td></tr>
+  <tr><td class="n">T8</td><td>Walang <b>CAPTCHA</b> sa register, login at forgot password</td><td>Proteksyon laban sa spam registration at paghula ng password.</td><td><span class="tag t-low">Mababa</span> (production)</td></tr>
+  <tr><td class="n">T9</td><td><b>Browser testing</b> ng mga bagong page: LOI, Templates, System Logs, Settings, Facility Profile, My Account, Reports (PhilHealth), Annex export mula sa app, at pagbukas ng 50k Matching Report sa Excel</td><td>Nasubukan na ang mga ito sa database (RPC, RLS at access ng bawat role) at ang Annex export sa automated test, pero hindi pa sa aktuwal na paggamit sa browser.</td><td><span class="tag t-high">Mataas</span></td></tr>
+</table>
+
+<h2>3. Proseso – desisyon na kailangan</h2>
+<table>
+  <tr><th>#</th><th>Tanong</th><th>Ginagawa ng system ngayon</th></tr>
+  <tr><td class="n">P1</td><td><b>Release ng resulta sa facility.</b> Dapat bang i-review muna ni FINMAREP ang Annex at Matching Report bago makita ng facility (may "Release to facility")?</td><td>Nakikita agad ng facility pagkatapos ng matching. <span class="tag t-high">Pinakamahalaga</span></td></tr>
+  <tr><td class="n">P2</td><td><b>Facility na walang LOI.</b> Papayagan ba ang matching kahit walang LOI coverage?</td><td>Pinapayagan; kapag walang coverage, lahat ng HO claim ay "Within Recon Period" (walang Recon Exception).</td></tr>
+  <tr><td class="n">P3</td><td><b>Pag-finalize ng recon.</b> Kailangan ba ng "Final" o naka-lock na matching, para hindi na mapalitan ang na-certify na Annex?</td><td>Pwedeng mag-rematch anumang oras; ang pinakabago ang ipinapakita.</td></tr>
+  <tr><td class="n">P4</td><td><b>Abiso sa email</b> (bagong HF ICS o LOI para sa FINMAREP; tapos na ang recon para sa facility; pending account para sa approver)</td><td>Walang abiso; kailangang buksan ang system para makita.</td></tr>
+  <tr><td class="n">P5</td><td><b>Puna ng facility</b> sa reconciling items (hal. "bayad na ito")</td><td>Wala sa system; sa email o tawag.</td></tr>
+  <tr><td class="n">P6</td><td><b>Bilang ng claims sa Annex A (Excel).</b> Ilalagay ba sa export?</td><td>Halaga lang ang nasa template; nasa screen ng system ang bilang.</td></tr>
+  <tr><td class="n">P7</td><td><b>Pansamantalang mapping na kailangang kumpirmahin:</b> PARD (#21), Tagging/Untagging (#23), RTH/Denial Reasons (#19a/b: blangkong column at ibig sabihin ng EFFECT codes)</td><td>Ginagamit ang "pinakabagong row" bawat claim series.</td></tr>
+  <tr><td class="n">P8</td><td><b>Hiwalay na accountant role</b></td><td>Wala pa; ang mga role ay FINMAREP, BAS Processor, Branch Admin, Facility Admin at Facility Staff.</td></tr>
+</table>
+
+<h2>4. Bago gamitin sa totoong data (production)</h2>
+<ul>
+  <li><b>Hiwalay na Supabase project sa Pro plan</b> (8 GB, daily backups, mas mabilis na disk). Pang-test lang ang kasalukuyang project at pekeng data lang ang laman nito.</li>
+  <li><b>Data Privacy Act (RA 10173):</b> may pangalan ng pasyente at member at Member PIN ang system. Kailangan ng pag-apruba ng DPO at ng IT security, privacy notice sa registration, at kasunduan sa mga facility.</li>
+  <li><b>Retention policy</b> (T4), at nakasulat na backup at restore procedure.</li>
+  <li><b>User manual at training</b> para sa FINMAREP, BAS Processor, Branch Admin at facility.</li>
+  <li><b>Paglilinis ng dokumentasyon:</b> markahan sa RECON_SPEC §6 ang mga tanong na nasagot na (karamihan ay nasa §3c-ter at §3c-quater).</li>
+</ul>
+
+<h2>5. Mungkahing pagkakasunod-sunod</h2>
+<ol class="steps">
+  <li><b>Ngayon (walang binabagong data):</b> i-set up ang git at unang commit (T1); idagdag ang mga index (T5); linisin ang spec at dokumentasyon.</li>
+  <li><b>May kaunting pagbura, kailangan ng pag-apruba:</b> lingguhang paglilinis ng job logs (T3); pag-alis ng lumang Edge Function (T6).</li>
+  <li><b>Pagpapasyahan ng team:</b> P1–P3, dahil binabago ng mga ito ang daloy ng trabaho. Kasunod ang retention policy (T4) at P4–P8.</li>
+  <li><b>Browser testing</b> ng lahat ng page (T9), gamit ang mga pekeng test file sa <code>docs/samples/</code> at ang <code>FAKE_TEST_PLAN.md</code>.</li>
+  <li><b>Production readiness:</b> Pro plan, hosting (T2), Data Privacy, CAPTCHA at leaked password protection (T7–T8), manual at training.</li>
+</ol>
+
+<footer>ReconciliationPro · System Review · 10/07/2026</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Facility Profile — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility,facility_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:22px; margin:0 0 4px; }
+  h3{ font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--slate); margin:0 0 12px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 20px; line-height:1.5; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:20px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:20px; }
+  dl{ margin:0; display:grid; grid-template-columns:max-content 1fr; gap:10px 18px; font-size:13.5px; }
+  dt{ color:var(--slate); }
+  dd{ margin:0; font-weight:500; }
+  .muted{ color:var(--slate); font-size:12.5px; font-weight:400; }
+  .none{ color:var(--amber); font-weight:500; }
+  .note{ background:var(--paper); border-radius:8px; padding:12px 14px; font-size:12.5px; color:var(--slate); line-height:1.5; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; background:#FBEAE6; color:var(--rust); }
+  .msg.show{ display:block; }
+  @media (max-width: 640px){ body{ padding:16px; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <h2 id="fName">Facility Profile</h2>
+  <p class="sub" id="fSub"></p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Facility</h3>
+      <dl>
+        <dt>Accreditation no.</dt><dd id="accr">—</dd>
+        <dt>PhilHealth branch</dt><dd id="branch">—</dd>
+        <dt>In the system since</dt><dd id="since">—</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>Accounts</h3>
+      <dl>
+        <dt>Facility Admin</dt><dd id="admin">—</dd>
+        <dt>Active accounts</dt><dd id="active">—</dd>
+        <dt>Waiting for approval</dt><dd id="pending">—</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Latest HF ICS upload</h3>
+      <dl id="hf"></dl>
+    </div>
+    <div class="card">
+      <h3>Latest Letter of Intent</h3>
+      <dl id="loi"></dl>
+    </div>
+    <div class="card">
+      <h3>Latest reconciliation</h3>
+      <dl id="recon"></dl>
+    </div>
+  </div>
+
+  <div class="note">The facility details come from PhilHealth's list of accredited facilities. If the name, accreditation number
+    or branch is wrong, ask your PhilHealth branch to correct it.</div>
+
+<script>
+(async function(){
+  const $ = function(id){ return document.getElementById(id); };
+  await window.sbUserReady;
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  // Mga hilera ng <dl> (textContent lang)
+  function rows(el, pairs, emptyText){
+    el.replaceChildren();
+    if (!pairs) {
+      const dd = document.createElement('dd'); dd.className = 'none'; dd.textContent = emptyText; dd.style.gridColumn = '1 / -1';
+      el.append(dd); return;
+    }
+    pairs.forEach(function(p){
+      const dt = document.createElement('dt'); dt.textContent = p[0];
+      const dd = document.createElement('dd'); dd.textContent = p[1];
+      el.append(dt, dd);
+    });
+  }
+
+  const { data: f, error } = await sb.rpc('facility_profile');
+  if (error) { const m = $('msg'); m.textContent = 'Could not load the facility profile: ' + error.message; m.className = 'msg show'; return; }
+  $('fName').textContent = f.name;
+  $('fSub').textContent = 'Accreditation no. ' + f.accreditation_no;
+  $('accr').textContent = f.accreditation_no;
+  $('branch').textContent = f.branch_name ? f.branch_name + ' (' + f.branch_code + ')' : '—';
+  $('since').textContent = fmtDate(f.registered_at);
+  $('admin').textContent = f.facility_admin || 'None yet';
+  $('active').textContent = Number(f.active_staff || 0).toLocaleString();
+  $('pending').textContent = Number(f.pending_staff || 0).toLocaleString();
+
+  const hf = f.latest_hf_ics;
+  rows($('hf'), hf && [['File', hf.file_name], ['Rows', Number(hf.rows || 0).toLocaleString()], ['Uploaded', fmtTs(hf.completed_at)],
+                       ['Total uploads', Number(f.hf_ics_count || 0).toLocaleString()]], 'No HF ICS uploaded yet.');
+  const l = f.latest_loi;
+  rows($('loi'), l && [['Date of letter', fmtDate(l.letter_date)], ['Coverage', fmtDate(l.coverage_start) + ' – ' + fmtDate(l.coverage_end)],
+                      ['Submitted', fmtTs(l.submitted_at)]], 'No Letter of Intent submitted yet.');
+  const r = f.latest_recon;
+  rows($('recon'), r && [['As of', fmtDate(r.report_date)], ['Matching date', fmtDate(r.matching_date)], ['Finished', fmtTs(r.finished_at)]],
+       'No reconciliation finished yet.');
+})();
+</script>
+</body>
+</html>

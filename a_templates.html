@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Templates — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .row{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field input[type=text], .field textarea{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .field textarea{ min-height:60px; resize:vertical; }
+  .check{ display:flex; align-items:center; gap:6px; font-size:13px; padding-bottom:9px; }
+  .btn{ font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:6px 11px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); }
+  .btn:hover{ border-color:#C3C8C1; }
+  .btn-primary{ background:var(--teal); border-color:var(--teal); color:#FFFFFF; font-size:13.5px; padding:8px 14px; }
+  .btn-primary:hover{ background:var(--teal-light); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:#E2EEEC; color:var(--teal); }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); vertical-align:middle; }
+  td.nowrap{ white-space:nowrap; }
+  tr.retired td{ color:var(--slate); }
+  .status{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .s-yes{ background:#E2EEEC; color:var(--teal); }
+  .s-no{ background:var(--paper); color:var(--slate); }
+  .s-retired{ background:#F7EEDD; color:var(--amber); }
+  .actions{ display:flex; gap:6px; flex-wrap:wrap; }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="card" id="uploadCard" hidden>
+    <h2>Upload a template</h2>
+    <p class="sub">Upload the blank file exactly as it should be used (for example the blank ICS workbook). Check
+      “Visible to facilities” so facilities can download it from their Upload Claims page.</p>
+    <div class="row">
+      <div class="field" style="flex:1; max-width:360px"><label for="tName">Template name *</label>
+        <input type="text" id="tName" maxlength="120" placeholder="e.g. HF ICS (blank)"></div>
+      <div class="field"><label for="tFile">File (.xlsx or .xls, up to 10 MB) *</label>
+        <input type="file" id="tFile" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1; min-width:260px"><label for="tDesc">Description</label>
+        <textarea id="tDesc" maxlength="500" placeholder="Optional: what it is for, which sheet to fill in, etc."></textarea></div>
+    </div>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="tVisible"> Visible to facilities</label>
+      <button class="btn btn-primary" type="button" id="uploadBtn">Upload template</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Templates</h2>
+    <p class="sub">Blank templates for download. To replace a template, upload the new file and retire the old one.</p>
+    <label class="check" id="showRetiredWrap" hidden><input type="checkbox" id="showRetired"> Show retired templates</label>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Template</th><th>File</th><th>Visible to facilities</th><th>Uploaded</th><th id="actHead" hidden></th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden>No templates yet.</div>
+    </div>
+    <div class="pager"><span id="listRange"></span>
+      <button class="btn" type="button" id="listPrev" disabled>Previous</button>
+      <button class="btn" type="button" id="listNext" disabled>Next</button></div>
+  </div>
+
+<script>
+(async function(){
+  const PAGE = 15, MAX_BYTES = 10 * 1024 * 1024;
+  const MIME = { xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel' };
+  const $ = function(id){ return document.getElementById(id); };
+  const state = { offset: 0 };
+  const me = await window.sbUserReady;
+  const canEdit = me.role === 'finmarep';
+  $('uploadCard').hidden = !canEdit;
+  $('showRetiredWrap').hidden = !canEdit;
+  $('actHead').hidden = !canEdit;
+
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  function size(n){ return n ? (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB') : ''; }
+  function showMsg(t, k){ const m = $('msg'); m.textContent = t; m.className = 'msg show ' + k; m.scrollIntoView({ block: 'nearest' }); }
+
+  async function download(t){
+    const { data, error } = await sb.storage.from('templates').createSignedUrl(t.file_path, 60,{ download: t.file_name });
+    if (error) { showMsg('Could not download: ' + error.message, 'err'); return; }
+    window.location.href = data.signedUrl;
+  }
+  async function setStatus(t, active, visible){
+    const { error } = await sb.rpc('set_template_status', { p_id: t.id, p_is_active: active, p_visible_to_facility: visible });
+    if (error) { showMsg('Could not update: ' + error.message, 'err'); return; }
+    loadList();
+  }
+
+  async function loadList(){
+    let q = sb.from('templates')
+      .select('id, name, description, file_path, file_name, file_size, visible_to_facility, is_active, uploaded_at', { count: 'exact' })
+      .order('is_active', { ascending: false }).order('uploaded_at', { ascending: false })
+      .range(state.offset, state.offset + PAGE - 1);
+    if (!(canEdit && $('showRetired').checked)) q = q.eq('is_active', true);
+    const { data, error, count } = await q;
+    const body = $('listBody'); body.replaceChildren();
+    if (error) { showMsg('Could not load templates: ' + error.message, 'err'); return; }
+    data.forEach(function(t){
+      const vis = t.is_active
+        ? h('span', { class: 'status ' + (t.visible_to_facility ? 's-yes' : 's-no'), text: t.visible_to_facility ? 'Yes' : 'No' })
+        : h('span', { class: 'status s-retired', text: 'Retired' });
+      const cells = [
+        h('td', {}, [h('div', { text: t.name }), t.description ? h('div', { class: 'muted', text: t.description }) : null]),
+        h('td', { class: 'nowrap' }, [h('button', { class: 'btn', type: 'button', text: 'Download', onclick: function(){ download(t); } }),
+          h('div', { class: 'muted', text: t.file_name + (t.file_size ? ' · ' + size(t.file_size) : '') })]),
+        h('td', {}, [vis]),
+        h('td', { class: 'nowrap', text: fmtTs(t.uploaded_at) })
+      ];
+      if (canEdit) {
+        cells.push(h('td', {}, [h('div', { class: 'actions' }, t.is_active ? [
+          h('button', { class: 'btn', type: 'button', text: t.visible_to_facility ? 'Hide from facilities' : 'Show to facilities',
+            onclick: function(){ setStatus(t, null, !t.visible_to_facility); } }),
+          h('button', { class: 'btn', type: 'button', text: 'Retire',
+            onclick: function(){ if (confirm('Retire “' + t.name + '”? It will no longer be listed for download.')) setStatus(t, false, null); } })
+        ] : [
+          h('button', { class: 'btn', type: 'button', text: 'Restore', onclick: function(){ setStatus(t, true, null); } })
+        ])]));
+      }
+      body.append(h('tr', { class: t.is_active ? '' : 'retired' }, cells));
+    });
+    $('listEmpty').hidden = data.length > 0;
+    const total = count || 0;
+    $('listRange').textContent = total ? (state.offset + 1) + '–' + (state.offset + data.length) + ' of ' + total : '';
+    $('listPrev').disabled = state.offset === 0;
+    $('listNext').disabled = state.offset + data.length >= total;
+  }
+
+  $('uploadBtn').addEventListener('click', async function(){
+    const name = $('tName').value.trim(), file = $('tFile').files[0];
+    if (!name) { showMsg('Enter the template name.', 'err'); return; }
+    if (!file) { showMsg('Choose the template file.', 'err'); return; }
+    const ext = (file.name.match(/\.(xlsx|xls)$/i) || [])[1];
+    if (!ext) { showMsg('The file must be an Excel workbook (.xlsx or .xls).', 'err'); return; }
+    if (file.size > MAX_BYTES) { showMsg('The file is larger than 10 MB.', 'err'); return; }
+    const btn = this; btn.disabled = true;
+    try {
+      const path = crypto.randomUUID() + '.' + ext.toLowerCase();
+      const up = await sb.storage.from('templates').upload(path, file, { contentType: MIME[ext.toLowerCase()], upsert: false });
+      if (up.error) throw up.error;
+      const { error } = await sb.rpc('add_template', {
+        p_name: name, p_description: $('tDesc').value, p_file_path: path,
+        p_file_name: file.name.slice(0, 255), p_visible_to_facility: $('tVisible').checked
+      });
+      if (error) throw error;
+      $('tName').value = ''; $('tDesc').value = ''; $('tFile').value = ''; $('tVisible').checked = false;
+      showMsg('Template uploaded.', 'ok');
+      state.offset = 0; loadList();
+    } catch (err) {
+      showMsg('Could not upload: ' + (err.message || err), 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  $('showRetired').addEventListener('change', function(){ state.offset = 0; loadList(); });
+  $('listPrev').addEventListener('click', function(){ state.offset = Math.max(0, state.offset - PAGE); loadList(); });
+  $('listNext').addEventListener('click', function(){ state.offset += PAGE; loadList(); });
+
+  loadList();
+})();
+</script>
+</body>
+</html>

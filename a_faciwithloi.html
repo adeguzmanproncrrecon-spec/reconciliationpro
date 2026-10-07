@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Facilities with LOI — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --rust:#A8432C; --slate:#5B6670; --line:#DADDD7;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12px; }
+  .bad{ color:var(--rust); font-weight:600; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select, .field input{
+    font-family:inherit; font-size:13.5px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink);
+  }
+  .btn{ font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:6px 11px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); max-width:220px;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .btn:hover{ border-color:#C3C8C1; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); white-space:nowrap; vertical-align:middle; }
+  td.wrap{ white-space:normal; min-width:180px; max-width:320px; }
+  tr.hist > td{ background:#F7F8F5; }
+  .sub-table{ border:1px solid var(--line); border-radius:8px; overflow-x:auto; background:var(--paper-raised); }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .pager{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:10px; font-size:12.5px; color:var(--slate); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body data-has-loi="true">
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="card">
+    <h2>Facilities with LOI</h2>
+    <p class="sub">Facilities that submitted a Letter of Intent. The latest LOI of each facility is shown; its coverage is the
+      default when a new reconciliation run is created in Data Ingestion.</p>
+    <div class="row">
+      <div class="field"><label for="branchFilter">Branch</label><select id="branchFilter"></select></div>
+      <div class="field" style="min-width:240px"><label for="facSearch">Facility</label>
+        <input type="search" id="facSearch" placeholder="Name or accreditation no." autocomplete="off"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Facility</th><th>Branch</th><th>Date of letter</th><th>Coverage</th><th>Remarks</th>
+          <th>LOI file</th><th>Submitted</th><th>Latest HF ICS</th><th>LOIs</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div class="empty" id="listEmpty" hidden>No facility has submitted a Letter of Intent.</div>
+    </div>
+    <div class="pager"><span id="listRange"></span>
+      <button class="btn" type="button" id="listPrev" disabled>Previous</button>
+      <button class="btn" type="button" id="listNext" disabled>Next</button></div>
+  </div>
+
+<script src="js/loi-list.js"></script>
+</body>
+</html>

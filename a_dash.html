@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — ReconciliationPro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="finmarep,bas_processor,branch_admin"></script>
+<style>
+  :root{
+    --ink:#141B22; --ink-soft:#1F2932; --paper:#F3F4F1; --paper-raised:#FFFFFF;
+    --teal:#1C4A47; --teal-light:#2E6B66; --rust:#A8432C; --amber:#8A6224; --slate:#5B6670; --line:#DADDD7;
+    --st-process:#3E5C76; --st-process-bg:#EAF0F5;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  [hidden]{ display:none !important; }
+  body{ font-family:'Inter',sans-serif; background:var(--paper-raised); color:var(--ink); padding:28px; }
+  h2{ font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; }
+  h3{ font-size:14.5px; margin:0 0 10px; }
+  .sub{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .muted{ color:var(--slate); font-size:12.5px; }
+  .card{ border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:22px; }
+  .head-row{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:200px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field select{ font-family:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--paper-raised); color:var(--ink); }
+  .btn{ font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:7px 12px; border-radius:8px;
+        border:1.5px solid var(--line); background:var(--paper-raised); color:var(--ink); text-decoration:none; display:inline-block; }
+  .btn:hover{ border-color:#C3C8C1; }
+  .msg{ display:none; font-size:13.5px; padding:11px 14px; border-radius:8px; margin-bottom:14px; line-height:1.5; }
+  .msg.show{ display:block; }
+  .msg.err{ background:#FBEAE6; color:var(--rust); }
+
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:22px; }
+  .tile{ border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .tile .k{ font-size:12px; color:var(--slate); font-weight:600; }
+  .tile .v{ font-family:'Fraunces',serif; font-size:26px; font-weight:500; margin-top:6px; font-variant-numeric:tabular-nums; }
+  .tile .n{ font-size:11.5px; color:var(--slate); margin-top:2px; }
+  .tile.warn .v{ color:var(--rust); }
+
+  .actions{ display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:14px; }
+  .act{ border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .act-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+  .act-head h3{ margin:0; font-size:13.5px; }
+  .count{ font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px; background:var(--paper); color:var(--slate); }
+  .count.on{ background:#FBEAE6; color:var(--rust); }
+  .count.go{ background:#E2EEEC; color:var(--teal); }
+  .act ul{ list-style:none; margin:0; padding:0; font-size:12.5px; }
+  .act li{ padding:6px 0; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
+  .act li:first-child{ border-top:none; }
+  .act li a{ color:var(--teal); font-weight:600; text-decoration:none; white-space:nowrap; }
+  .act .none{ font-size:12.5px; color:var(--slate); }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; font-size:11.5px; font-weight:600; color:var(--slate); background:var(--paper); padding:8px 10px; white-space:nowrap; }
+  td{ padding:8px 10px; border-top:1px solid var(--line); white-space:nowrap; vertical-align:top; }
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  td .c{ display:block; font-size:11px; color:var(--slate); }
+  tr.total td{ font-weight:700; background:#FAFBF8; }
+  tr.pick{ cursor:pointer; }
+  tr.pick:hover td{ background:#F7F8F5; }
+  .empty{ padding:18px; text-align:center; color:var(--slate); font-size:13px; }
+  .status{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .s-done, .s-matched{ background:#E2EEEC; color:var(--teal); }
+  .s-queued, .s-running, .s-draft{ background:#F7EEDD; color:var(--amber); }
+  .s-failed{ background:#FBEAE6; color:var(--rust); }
+  @media (max-width: 640px){ body{ padding:16px; } .field{ min-width:100%; } }
+</style>
+</head>
+<body>
+
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+
+  <div class="head-row">
+    <div>
+      <h2>Dashboard</h2>
+      <p class="sub" id="subline" style="margin:0"></p>
+    </div>
+    <div class="field">
+      <label for="branchFilter">Branch</label>
+      <select id="branchFilter"></select>
+    </div>
+  </div>
+
+  <!-- Bilang -->
+  <div class="tiles" id="tiles"></div>
+
+  <!-- Kailangang aksyunan -->
+  <div class="card">
+    <h2>Needs attention</h2>
+    <p class="sub">Things waiting for someone to act on, in your branches.</p>
+    <div class="actions" id="actions"></div>
+  </div>
+
+  <!-- Status ng claims bawat branch -->
+  <div class="card">
+    <h2>Claims status by branch</h2>
+    <p class="sub" id="statusSub">Latest matching of each facility, status as of its report date (amount used for recon; number of claims below).</p>
+    <div class="table-wrap">
+      <table>
+        <thead id="statusHead"></thead>
+        <tbody id="statusBody"></tbody>
+      </table>
+      <div class="empty" id="statusEmpty" hidden>No finished matching yet.</div>
+    </div>
+  </div>
+
+  <!-- Pinakabagong runs -->
+  <div class="card">
+    <h2>Latest recon runs</h2>
+    <p class="sub">Click a run to open it in Reconciliation.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Facility</th><th>Branch</th><th>Report date</th><th>Matching date</th><th>Run</th><th>Latest matching</th><th>Finished</th></tr></thead>
+        <tbody id="runsBody"></tbody>
+      </table>
+      <div class="empty" id="runsEmpty" hidden>No runs yet.</div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const STATUSES = ['PAID', 'APPROVED FOR PAYMENT', 'IN PROCESS', 'DENIED', 'RTH', 'UNMATCHED', 'DUPLICATE', 'NOT YET FILED', 'UNMAPPED'];
+  const $ = function(id){ return document.getElementById(id); };
+  const me = await window.sbUserReady;
+  const isFinmarep = me.role === 'finmarep';
+  const canApprove = me.role === 'branch_admin' || me.isFinmarepApprover;
+
+  // ---------- helpers (textContent lang para sa data) ----------
+  function h(tag, attrs, kids){
+    const n = document.createElement(tag);
+    Object.entries(attrs || {}).forEach(function([k, v]){
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    });
+    (kids || []).forEach(function(c){ if (c !== null && c !== undefined) n.append(c); });
+    return n;
+  }
+  function td(t, cls){ return h('td', { class: cls || '', text: t === null || t === undefined ? '—' : String(t) }); }
+  function fmtDate(d){ if (!d) return '—'; const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; }
+  function fmtTs(ts){ if (!ts) return '—'; const t = new Date(ts), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear() + ' ' + z(t.getHours()) + ':' + z(t.getMinutes()); }
+  function money(n){ return n === null || n === undefined ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function int(n){ return Number(n || 0).toLocaleString(); }
+  function badge(s){ return s ? h('span', { class: 'status s-' + s, text: s }) : document.createTextNode('—'); }
+  function showErr(t){ const m = $('msg'); m.textContent = t; m.className = 'msg show err'; }
+  function today(){ const t = new Date(), z = function(n){ return String(n).padStart(2, '0'); };
+    return z(t.getMonth() + 1) + '/' + z(t.getDate()) + '/' + t.getFullYear(); }
+  function facLabel(x){ return x.facility + ' (' + x.accreditation_no + ')' + (x.branch_code ? ' · ' + x.branch_code : ''); }
+
+  $('subline').textContent = me.name + ' · ' + me.roleLabel + ' · ' + today();
+
+  // ---------- branch filter (UI lang; ang saklaw ay ayon sa RLS/can_view_facility) ----------
+  async function loadBranches(){
+    const [{ data: br }, { data: mine }] = await Promise.all([
+      sb.from('branches').select('id, code, name').order('name'),
+      sb.from('user_branches').select('branch_id').eq('user_id', me.id)
+    ]);
+    const myIds = (mine || []).map(function(r){ return r.branch_id; });
+    if (me.branchId && !myIds.includes(me.branchId)) myIds.push(me.branchId);
+    const sel = $('branchFilter');
+    sel.replaceChildren();
+    if (isFinmarep) {
+      if (myIds.length) sel.add(new Option('My branches', 'mine'));
+      sel.add(new Option('All branches', 'all'));
+      (br || []).forEach(function(b){ sel.add(new Option(b.name + ' (' + b.code + ')', b.id)); });
+    } else {
+      sel.add(new Option('All my branches', 'all'));
+      (br || []).filter(function(b){ return myIds.includes(b.id); })
+        .forEach(function(b){ sel.add(new Option(b.name + ' (' + b.code + ')', b.id)); });
+    }
+    sel.dataset.mine = JSON.stringify(myIds);
+  }
+  function branchParam(){
+    const v = $('branchFilter').value;
+    if (v === 'all' || !v) return null;
+    if (v === 'mine') return JSON.parse($('branchFilter').dataset.mine || '[]');
+    return [v];
+  }
+
+  // ---------- render ----------
+  function tile(k, v, note, warn){
+    return h('div', { class: 'tile' + (warn ? ' warn' : '') }, [
+      h('div', { class: 'k', text: k }), h('div', { class: 'v', text: int(v) }), note ? h('div', { class: 'n', text: note }) : null]);
+  }
+  function renderTiles(t){
+    $('tiles').replaceChildren(
+      tile('Facilities', t.facilities, 'in this view'),
+      tile('With HF ICS', t.with_hf_ics, 'facility submitted claims'),
+      tile('Matched', t.with_match, 'facilities with finished matching'),
+      tile('Runs in draft', t.runs_draft, 'uploads or matching pending'),
+      tile('Matching in progress', t.jobs_active, 'queued or running'),
+      tile('Failed matching', t.jobs_failed, 'latest attempt failed', t.jobs_failed > 0)
+    );
+  }
+
+  function actionBox(title, block, itemFn, opts){
+    const n = block ? Number(block.count) : 0;
+    const box = h('div', { class: 'act' });
+    box.append(h('div', { class: 'act-head' }, [h('h3', { text: title }),
+      h('span', { class: 'count' + (n ? (opts && opts.good ? ' go' : ' on') : ''), text: int(n) })]));
+    if (!n) { box.append(h('div', { class: 'none', text: opts && opts.emptyText || 'Nothing to do.' })); return box; }
+    const ul = h('ul');
+    (block.items || []).forEach(function(x){ ul.append(itemFn(x)); });
+    box.append(ul);
+    if (n > (block.items || []).length) box.append(h('div', { class: 'muted', style: 'margin-top:6px', text: 'Showing the latest ' + block.items.length + ' of ' + int(n) + '.' }));
+    return box;
+  }
+  function link(text, href){ return h('a', { href: href, text: text }); }
+
+  async function renderActions(d){
+    const boxes = [];
+    boxes.push(actionBox('New HF ICS without a run', d.new_hf_ics, function(x){
+      return h('li', {}, [h('span', { text: facLabel(x) + ' · ' + int(x.row_count) + ' rows · ' + fmtTs(x.completed_at) }),
+        isFinmarep ? link('Create run', 'import.html') : null]);
+    }, { emptyText: 'Every latest HF ICS already has a run.' }));
+    boxes.push(actionBox('Runs missing uploads', d.incomplete_runs, function(x){
+      return h('li', {}, [h('span', { text: facLabel(x) + ' · ' + fmtDate(x.report_date) + ' · missing: ' + (x.missing || []).join(', ') }),
+        isFinmarep ? link('Upload', 'import.html?run=' + encodeURIComponent(x.run_id)) : null]);
+    }));
+    boxes.push(actionBox('Ready for matching', d.ready_runs, function(x){
+      return h('li', {}, [h('span', { text: facLabel(x) + ' · ' + fmtDate(x.report_date) }),
+        link(isFinmarep ? 'Run matching' : 'Open', 'a_reconciliation.html?run=' + encodeURIComponent(x.run_id))]);
+    }, { good: true, emptyText: 'No run is waiting for matching.' }));
+    boxes.push(actionBox('Unmapped processes', d.unmapped, function(x){
+      return h('li', {}, [h('span', { text: facLabel(x) + ' · ' + int(x.processes) + ' process(es)' }),
+        link('Map', 'a_reconciliation.html?run=' + encodeURIComponent(x.run_id))]);
+    }, { emptyText: 'All status trail processes are mapped.' }));
+    boxes.push(actionBox('Failed matching', d.failed_jobs, function(x){
+      return h('li', {}, [h('span', { text: facLabel(x) + ' · ' + fmtTs(x.finished_at) + (x.error ? ' · ' + x.error : '') }),
+        link('Open', 'a_reconciliation.html?run=' + encodeURIComponent(x.run_id))]);
+    }, { emptyText: 'No failed matching.' }));
+    if (canApprove) {
+      const { data, error } = await sb.rpc('list_manageable_accounts', { p_status: 'pending', p_search: null, p_limit: 5, p_offset: 0 });
+      const rows = error ? [] : (data || []);
+      const block = { count: rows.length ? Number(rows[0].total_count) : 0, items: rows };
+      boxes.push(actionBox('Pending account approvals', block, function(x){
+        return h('li', {}, [h('span', { text: (x.full_name || x.email) + ' · ' + (x.requested_branch_name || x.requested_facility_name || '') }),
+          link('Review', 'a_accounts.html')]);
+      }, { emptyText: 'No pending accounts.' }));
+    }
+    $('actions').replaceChildren.apply($('actions'), boxes);
+  }
+
+  function renderStatus(rows, facCount){
+    const head = h('tr', {}, [h('th', { text: 'Branch' })].concat(STATUSES.map(function(s){ return h('th', { class: 'num', text: s }); }))
+      .concat([h('th', { class: 'num', text: 'Total' })]));
+    $('statusHead').replaceChildren(head);
+    const body = $('statusBody'); body.replaceChildren();
+    $('statusEmpty').hidden = rows.length > 0;
+    $('statusSub').textContent = 'Latest matching of ' + int(facCount) + ' facilit' + (Number(facCount) === 1 ? 'y' : 'ies') +
+      ', status as of each report date (amount used for recon; number of claims below).';
+    if (!rows.length) return;
+    const byBranch = new Map();
+    rows.forEach(function(r){
+      const key = r.branch_code || '—';
+      if (!byBranch.has(key)) byBranch.set(key, { name: r.branch_name, s: {} });
+      byBranch.get(key).s[r.status] = r;
+    });
+    const total = {};
+    function cell(x){
+      if (!x) return td('—', 'num');
+      return h('td', { class: 'num' }, [document.createTextNode(money(x.amount)), h('span', { class: 'c', text: int(x.claims) + ' claims' })]);
+    }
+    byBranch.forEach(function(b, code){
+      let amt = 0, n = 0;
+      const cells = [h('td', {}, [document.createTextNode(code), h('span', { class: 'c', text: b.name || '' })])];
+      STATUSES.forEach(function(s){
+        const x = b.s[s];
+        cells.push(cell(x));
+        if (x) {
+          if (s !== 'NOT YET FILED') { amt += Number(x.amount || 0); n += Number(x.claims || 0); }
+          total[s] = total[s] || { amount: 0, claims: 0 };
+          total[s].amount += Number(x.amount || 0); total[s].claims += Number(x.claims || 0);
+        }
+      });
+      cells.push(cell({ amount: amt, claims: n }));
+      body.append(h('tr', {}, cells));
+    });
+    if (byBranch.size > 1) {
+      let amt = 0, n = 0;
+      const cells = [td('All branches')];
+      STATUSES.forEach(function(s){
+        cells.push(cell(total[s]));
+        if (total[s] && s !== 'NOT YET FILED') { amt += total[s].amount; n += total[s].claims; }
+      });
+      cells.push(cell({ amount: amt, claims: n }));
+      body.append(h('tr', { class: 'total' }, cells));
+    }
+  }
+
+  function renderRuns(rows){
+    const body = $('runsBody'); body.replaceChildren();
+    $('runsEmpty').hidden = rows.length > 0;
+    rows.forEach(function(r){
+      body.append(h('tr', { class: 'pick', onclick: function(){ location.href = 'a_reconciliation.html?run=' + encodeURIComponent(r.run_id); } }, [
+        h('td', {}, [h('div', { text: r.facility }), h('div', { class: 'muted', text: r.accreditation_no })]),
+        td(r.branch_code), td(fmtDate(r.report_date)), td(fmtDate(r.matching_date)),
+        h('td', {}, [badge(r.run_status)]), h('td', {}, [badge(r.job_status)]), td(fmtTs(r.finished_at))
+      ]));
+    });
+  }
+
+  async function load(){
+    const { data, error } = await sb.rpc('ph_dashboard', { p_branches: branchParam() });
+    if (error) { showErr('Could not load the dashboard: ' + error.message); return; }
+    $('msg').className = 'msg';
+    renderTiles(data.tiles || {});
+    await renderActions(data);
+    renderStatus(data.status_by_branch || [], data.facilities_in_status || 0);
+    renderRuns(data.latest_runs || []);
+  }
+
+  $('branchFilter').addEventListener('change', load);
+  await loadBranches();
+  await load();
+})();
+</script>
+</body>
+</html>
