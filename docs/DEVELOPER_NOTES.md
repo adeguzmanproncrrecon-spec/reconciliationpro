@@ -7,6 +7,14 @@ System na papalit sa Excel reconciliation workbook ng PhilHealth (hal. "NCR NORT
 - Multi-page HTML/CSS/JS (walang framework, walang build step).
 - Supabase (Postgres + Auth + RLS). **Test project lang — pekeng data lang.**
 
+## Pagpapatakbo (local)
+- **Huwag buksan ang HTML bilang file** (double-click / `file:///…`): hindi gagana ang Excel export (template fetch at
+  Web Worker). I-double-click ang **`tools/serve.cmd`** → bubukas ang `http://localhost:8080/login.html`.
+  Ibang port: `tools\serve.cmd -Port 8090`. Ctrl+C para itigil.
+- Localhost lang ang server at allowlist ang ibinibigay (mga HTML page sa root, `js/`, `css/`, `img/`, `templates/`).
+- Sa Supabase → Authentication → URL Configuration, dapat nasa **Redirect URLs** ang `http://localhost:8080/**`
+  (para sa link ng forgot password at email confirmation).
+
 ## Mga file
 | File | Side | Papel |
 |---|---|---|

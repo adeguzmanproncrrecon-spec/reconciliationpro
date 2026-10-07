@@ -286,7 +286,16 @@
     if ('annex_acknowledged_position' in pos) { sh.styleLike('F' + below(48), 'A' + below(48)); sh.str('F' + below(48), pos.annex_acknowledged_position); }
   }
 
+  // Hindi gumagana ang template fetch at Web Worker kapag file:// ang page
+  function requireHttp(){
+    if (location.protocol === 'file:') {
+      throw new Error('Excel export needs the system to be opened through a web address, not as a file. ' +
+                      'Start tools/serve.cmd and open http://localhost:8080/login.html.');
+    }
+  }
+
   async function exportAnnex(matchId, internal){
+    requireHttp();
     const [{ data, error }, fl, res, st] = await Promise.all([
       sb.rpc('annex_a', { p_match: matchId, p_internal: !!internal }),
       loadFflate(),
@@ -327,6 +336,7 @@
   // match: { id, report_date, prev_report_date, matching_date, summary, hospital_name, accreditation_no }
   // onProgress(rowsNaNagawa, kabuuangRows)
   async function exportMatchingReport(match, onProgress){
+    requireHttp();
     const { data: { session } } = await sb.auth.getSession();
     if (!session) throw new Error('Not signed in');
     const total = match.summary && match.summary.hf_rows !== undefined ? Number(match.summary.hf_rows) : 0;
