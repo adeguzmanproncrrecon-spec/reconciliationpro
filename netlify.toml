@@ -1,0 +1,11 @@
+# Static site served directly from the repository root (no build step).
+[build]
+  base = "."
+  publish = "."
+
+# Make the login page the landing page.
+[[redirects]]
+  from = "/"
+  to = "/login.html"
+  status = 302
+  force = true
