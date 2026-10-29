@@ -214,6 +214,11 @@
     .search{ width:100%; }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"
+        integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok"
+        crossorigin="anonymous"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/auth-guard.js" data-roles="facility,facility_admin"></script>
 </head>
 <body>
 
@@ -244,7 +249,7 @@
       label:'In Process', cls:'s-process',
       note:'Claims PhilHealth is still evaluating. No action needed from you yet.',
       extraHead:'Current stage',
-      extra:c => `<span class="badge s-process">${c.stage}</span>`
+      extra:c => `<span class="badge s-process">${esc(c.stage)}</span>`
     },
     payment: {
       label:'For Payment', cls:'s-payment',
@@ -269,26 +274,34 @@
   const ORDER = ['process','payment','rth','denied'];
 
   /* ---------- SAMPLE DATA (papalitan ng Supabase query) ---------- */
-  const claims = [
-    { no:'2026-0918-00412', patient:'Dela Cruz, Juan M.',     pkg:'Community-Acquired Pneumonia', adm:'2026-08-28', dis:'2026-09-02', filed:'2026-09-10', amount:15000, status:'process', stage:'Evaluation' },
-    { no:'2026-0918-00419', patient:'Santos, Maria L.',       pkg:'Normal Spontaneous Delivery',  adm:'2026-09-01', dis:'2026-09-03', filed:'2026-09-12', amount:6500,  status:'process', stage:'Received' },
-    { no:'2026-0918-00433', patient:'Reyes, Antonio B.',      pkg:'Acute Gastroenteritis',       adm:'2026-09-05', dis:'2026-09-08', filed:'2026-09-15', amount:6000,  status:'process', stage:'Evaluation' },
-    { no:'2026-0918-00451', patient:'Garcia, Liza P.',        pkg:'Dengue Fever',                adm:'2026-09-07', dis:'2026-09-11', filed:'2026-09-18', amount:13000, status:'process', stage:'Audit' },
-    { no:'2026-0828-00287', patient:'Mendoza, Carlo R.',      pkg:'Cesarean Section',            adm:'2026-08-10', dis:'2026-08-14', filed:'2026-08-20', amount:19000, approved:19000, status:'payment' },
-    { no:'2026-0828-00291', patient:'Bautista, Rosa T.',      pkg:'Urinary Tract Infection',     adm:'2026-08-12', dis:'2026-08-15', filed:'2026-08-21', amount:8000,  approved:8000,  status:'payment' },
-    { no:'2026-0828-00305', patient:'Villanueva, Pedro S.',   pkg:'Hypertensive Urgency',        adm:'2026-08-15', dis:'2026-08-17', filed:'2026-08-24', amount:9000,  approved:9000,  status:'payment' },
-    { no:'2026-0905-00350', patient:'Aquino, Teresa D.',      pkg:'Community-Acquired Pneumonia', adm:'2026-08-20', dis:'2026-08-25', filed:'2026-09-01', amount:15000, status:'rth', reason:'Missing Clinical Abstract (CF4)', deadline:'2026-10-06' },
-    { no:'2026-0905-00362', patient:'Ramos, Eduardo F.',      pkg:'Acute Gastroenteritis',       adm:'2026-08-22', dis:'2026-08-24', filed:'2026-09-03', amount:6000,  status:'rth', reason:'Patient signature missing on CF1', deadline:'2026-10-21' },
-    { no:'2026-0812-00198', patient:'Torres, Angelica M.',    pkg:'Dengue Fever',                adm:'2026-07-28', dis:'2026-08-01', filed:'2026-08-08', amount:13000, status:'denied', reason:'Filed beyond the 60-day filing period' },
-    { no:'2026-0812-00203', patient:'Flores, Ramon C.',       pkg:'Pneumonia, High Risk',        adm:'2026-07-30', dis:'2026-08-06', filed:'2026-08-10', amount:32000, status:'denied', reason:'Member not eligible on date of admission' }
-  ];
+let claims = [];
 
+async function loadClaims() {
+  const { data, error } = await sb
+    .from('v_hf_claims')
+    .select('no,patient,pkg,adm,dis,filed,amount,approved,status,stage,reason,deadline')
+    .not('status', 'is', null)               // drops UNMAPPED rows
+    .order('filed', { ascending: false })
+    .limit(1000);                            // PostgREST caps at 1000 anyway; paginate if you exceed it
+
+  if (error) {
+    console.error('loadClaims failed:', error.message);   // message only, never the key/session
+    claims = [];
+    return false;
+  }
+  claims = data.map(r => ({
+    ...r,
+    amount:   Number(r.amount),
+    approved: r.approved == null ? undefined : Number(r.approved),
+  }));
+  return true;
+}
   /* ---------- HELPERS ---------- */
   const peso = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits:2 });
   // MM/DD/YYYY (docs/DEVELOPER_NOTES.md: Petsa sa UI)
   const fmtDate = d => { const p = String(d).slice(0, 10).split('-'); return p[1] + '/' + p[2] + '/' + p[0]; };
   const daysLeft = d => Math.ceil((new Date(d + 'T00:00:00') - new Date().setHours(0,0,0,0)) / 86400000);
-  const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 
   let current = 'process';
   let query = '';
@@ -328,7 +341,7 @@
 
     const q = query.toLowerCase();
     const rows = claims
-      .filter(c => c.status === current)
+      .filter(c => c.status === current)  
       .filter(c => !q || c.no.toLowerCase().includes(q) || c.patient.toLowerCase().includes(q));
 
     document.getElementById('tbody').innerHTML = rows.length
@@ -346,7 +359,7 @@
 
   function show(status){
     current = status;
-    renderSummary(); renderTabs(); renderTable();
+    renderSummary(); renderTabs(); renderTable(); 
   }
 
   document.addEventListener('click', e => {
@@ -357,8 +370,21 @@
     query = e.target.value.trim();
     renderTable();
   });
-
+/* ---------- TEST ---------- */
+(async () => {
+  try {
+    await window.sbUserReady;                       // hintayin ang auth-guard
+    const ok = await loadClaims();
+    console.log('loadClaims ok:', ok, '| rows:', claims.length);
+    if (!ok) document.getElementById('tabNote').textContent =
+      'Could not load claims. Please refresh or contact support.';
+  } catch (err) {
+    console.error('init failed:', err.message);
+  }
   show('process');
+})();
+
+  
 </script>
 </body>
 </html>
